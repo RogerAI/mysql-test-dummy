@@ -43,6 +43,23 @@ public class DatabaseFixture : IDisposable
                 ImageUrl varchar(512) NOT NULL,
                 SKU char(12) NOT NULL,
                 Subtitle varchar(120) NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+            CREATE TABLE Users
+            (
+                Id int(11) NOT NULL PRIMARY KEY AUTO_INCREMENT,
+                Name varchar(300) NOT NULL,
+                Email varchar(256) NOT NULL,
+                Country char(2) NOT NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+            CREATE TABLE Orders
+            (
+                Id int(11) NOT NULL PRIMARY KEY AUTO_INCREMENT,
+                UserId int(11) NOT NULL,
+                ProductId int(11) NOT NULL,
+                FOREIGN KEY `FK_Orders__UserId` (UserId) REFERENCES Users (Id) ON DELETE NO ACTION ON UPDATE NO ACTION,
+                FOREIGN KEY `FK_Orders__ProductId` (ProductId) REFERENCES Products (Id) ON DELETE NO ACTION ON UPDATE NO ACTION
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
 
         command.ExecuteNonQuery();
