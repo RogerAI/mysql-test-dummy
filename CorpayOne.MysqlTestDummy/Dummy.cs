@@ -87,9 +87,61 @@ public static class Dummy
 
         var idType = typeof(TId);
 
-        if (idType == typeof(int) && value is int i)
+        if (idType == typeof(int))
         {
-            id = (TId)(object)i;
+            switch (value)
+            {
+                case int i:
+                    id = (TId)(object)i;
+                    break;
+                case long l:
+                    id = (TId)(object)(int)l;
+                    break;
+                case uint u:
+                    id = (TId)(object)(int)u;
+                    break;
+                case ulong ul:
+                    id = (TId)(object)(int)ul;
+                    break;
+                case short sh:
+                    id = (TId)(object)(int)sh;
+                    break;
+                case ushort us:
+                    id = (TId)(object)(int)us;
+                    break;
+                default:
+                    return false;
+            }
+
+            return true;
+        }
+
+        if (idType == typeof(long))
+        {
+            switch (value)
+            {
+                case int i:
+                    id = (TId)(object)(long)i;
+                    break;
+                case long l:
+                    id = (TId)(object)l;
+                    break;
+                case uint u:
+                    id = (TId)(object)(long)u;
+                    break;
+                case ulong ul:
+                    id = (TId)(object)(long)ul;
+                    break;
+                case short sh:
+                    id = (TId)(object)(long)sh;
+                    break;
+                case ushort us:
+                    id = (TId)(object)(long)us;
+                    break;
+                default:
+                    return false;
+            }
+
             return true;
         }
 
