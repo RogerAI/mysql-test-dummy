@@ -35,12 +35,14 @@ public class DatabaseFixture : IDisposable
         command.CommandText = @$"
             USE {DatabaseName};
 
-            CREATE TABLE Products 
+            CREATE TABLE Products
             (
                 Id int(11) NOT NULL PRIMARY KEY AUTO_INCREMENT,
                 Name varchar(64) NOT NULL,
                 Created TIMESTAMP NOT NULL,
-                ImageUrl varchar(512) NOT NULL
+                ImageUrl varchar(512) NOT NULL,
+                SKU char(12) NOT NULL,
+                Subtitle varchar(120) NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
 
         command.ExecuteNonQuery();

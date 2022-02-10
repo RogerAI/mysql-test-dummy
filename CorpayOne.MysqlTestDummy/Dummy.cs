@@ -241,9 +241,12 @@ public static class Dummy
 
         var random = dummyOptions.RandomSeed.HasValue ? new Random(dummyOptions.RandomSeed.Value) : new Random();
 
-        var requiredColumns = columnSchema.Where(x => !x.IsActuallyNullable
-                                                      && !string.Equals(x.Name, primaryKeyName)
-                                                      && string.IsNullOrWhiteSpace(x.ColumnDefault)).ToList();
+        var requiredColumns = dummyOptions.ForcePopulateOptionalColumns
+            ? columnSchema
+            : columnSchema.Where(
+                x => !x.IsActuallyNullable
+                     && !string.Equals(x.Name, primaryKeyName)
+                     && string.IsNullOrWhiteSpace(x.ColumnDefault)).ToList();
 
         var insertPart = $"INSERT INTO {tableName} ({string.Join(", ", requiredColumns.Select(x => $"`{x.Name}`"))}) ";
 
@@ -359,6 +362,9 @@ public static class Dummy
                         }
 
                         break;
+                    case "char":
+                        value = GenerateRandomStringOfLength(column.MaxLength.GetValueOrDefault(), random);
+                        break;
                     case "tinyint":
                         value = 0;
                         break;
@@ -400,16 +406,21 @@ public static class Dummy
 
     private static string GenerateRandomStringOfLengthOrLower(int length, Random random)
     {
+        var lengthToFill = random.Next(length / 2, length);
+
+        return GenerateRandomStringOfLength(lengthToFill, random);
+    }
+
+    private static string GenerateRandomStringOfLength(int length, Random random)
+    {
         // Alphabetical characters with duplicates for English letter distribution plus some bonus Unicode values.
         const string chars = "aabcdeeeefghhijklmmnnoopqrrsstttuvwxyz";
         const string specialChars = "øüéà";
 
         const int multiwordTextLength = 30;
 
-        var lengthToFill = random.Next(length / 2, length);
-
         var result = string.Empty;
-        for (var i = 0; i < lengthToFill; i++)
+        for (var i = 0; i < length; i++)
         {
             if (i > 0 && i % multiwordTextLength == 0)
             {
