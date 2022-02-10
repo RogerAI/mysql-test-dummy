@@ -403,14 +403,14 @@ public static class Dummy
     {
         public string Name { get; }
 
-        public string? ColumnDefault { get; init; }
+        public string? ColumnDefault { get; set; }
 
         // ReSharper disable once MemberCanBePrivate.Local
-        public string? IsNullable { get; init; }
+        public string? IsNullable { get; set; }
 
         public string DataType { get; }
 
-        public int? MaxLength { get; init; }
+        public int? MaxLength { get; set; }
 
         public bool IsActuallyNullable
         {
