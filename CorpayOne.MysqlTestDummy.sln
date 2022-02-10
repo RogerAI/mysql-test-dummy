@@ -5,6 +5,8 @@ VisualStudioVersion = 17.0.32126.317
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CorpayOne.MysqlTestDummy", "CorpayOne.MysqlTestDummy\CorpayOne.MysqlTestDummy.csproj", "{989E6B34-C5E3-4590-A449-46662B9705BD}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CorpayOne.MysqlTestDummy.Tests", "CorpayOne.MysqlTestDummy.Tests\CorpayOne.MysqlTestDummy.Tests.csproj", "{D4E32224-8627-4F55-A736-7C71133C304B}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +17,10 @@ Global
 		{989E6B34-C5E3-4590-A449-46662B9705BD}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{989E6B34-C5E3-4590-A449-46662B9705BD}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{989E6B34-C5E3-4590-A449-46662B9705BD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D4E32224-8627-4F55-A736-7C71133C304B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D4E32224-8627-4F55-A736-7C71133C304B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D4E32224-8627-4F55-A736-7C71133C304B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D4E32224-8627-4F55-A736-7C71133C304B}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
