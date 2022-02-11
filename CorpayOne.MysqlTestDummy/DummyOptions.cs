@@ -46,6 +46,36 @@ public class DummyOptions<TId>
     /// </summary>
     public bool ForcePopulateOptionalColumns { get; set; }
 
+    public DummyOptions<TId> WithForeignKey(string columnName, TId value)
+    {
+        ForeignKeys ??= new List<ForeignKeyValue>();
+
+        ForeignKeys.Add(new ForeignKeyValue(columnName, value));
+
+        return this;
+    }
+
+    public DummyOptions<TId> WithColumnValue(string columnName, object? value)
+    {
+        ColumnValues ??= new List<ColumnValue>();
+
+        ColumnValues.Add(new ColumnValue(columnName, value));
+
+        return this;
+    }
+
+    public DummyOptions<TId> WithRandomSeed(int seed)
+    {
+        RandomSeed = seed;
+        return this;
+    }
+
+    public DummyOptions<TId> MustForceCreate()
+    {
+        ForceCreate = true;
+        return this;
+    }
+
     /// <summary>
     /// Used to hardcode the value of the foreign key if you have an existing entity you want linked.
     /// </summary>

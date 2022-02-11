@@ -11,8 +11,10 @@
     <Description>Easily insert test data into any database, recursively filling dependent tables.</Description>
     <copyright>Copyright 2022</copyright>
     <tags>XUnit UnitTest MySql</tags>
-    <Version>0.0.9</Version>
+    <Version>0.0.10</Version>
     <RepositoryUrl>https://github.com/RogerAI/mysql-test-dummy</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/RogerAI/mysql-test-dummy</PackageProjectUrl>
+    <PackageTags>MySQL;test;unit testing;mock data;</PackageTags>
   </PropertyGroup>
 
 </Project>
