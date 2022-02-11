@@ -33,16 +33,42 @@ namespace CorpayOne.MysqlTestDummy.Tests
             Assert.False(
                 string.IsNullOrWhiteSpace(product.Name),
                 $"Product name should not have been null or whitespace but was: '{product.Name}'");
+
+            Assert.True(product.SKU.Length == 12, $"Expected SKU to be 12 characters but was: {product.SKU} ({product.SKU.Length} chars)");
         }
 
         [Fact]
-        public void SimpleIntId_UserTable_Creates()
+        public async Task SimpleIntId_UserTable_Creates()
         {
             var conn = _fixture.GetConnection();
 
             var id = Dummy.CreateId<int>(conn, "Users");
 
             Assert.True(id > 0, $"Expected id to be greater than zero but was {id}.");
+
+            var user = await conn.GetAsync<User>(id);
+
+            Assert.NotNull(user);
+
+            Assert.Equal(id, user.Id);
+        }
+
+        [Fact]
+        public async Task SimpleIntId_OrderTable_Creates()
+        {
+            var conn = _fixture.GetConnection();
+
+            var id = Dummy.CreateId<int>(conn, "Orders");
+
+            Assert.True(id > 0, $"Expected id to be greater than zero but was {id}.");
+
+            var order = await conn.GetAsync<Order>(id);
+
+            Assert.NotNull(order);
+
+            var user = await conn.GetAsync<User>(order.Id);
+
+            Assert.NotNull(user);
         }
     }
 }
