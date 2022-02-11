@@ -60,6 +60,13 @@ public class DatabaseFixture : IDisposable
                 ProductId int(11) NOT NULL,
                 FOREIGN KEY `FK_Orders__UserId` (UserId) REFERENCES Users (Id) ON DELETE NO ACTION ON UPDATE NO ACTION,
                 FOREIGN KEY `FK_Orders__ProductId` (ProductId) REFERENCES Products (Id) ON DELETE NO ACTION ON UPDATE NO ACTION
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+            CREATE TABLE Bids
+            (
+                BidId binary(16) NOT NULL PRIMARY KEY,
+                Amount bigint(20) NOT NULL,
+                Note varchar(64) NOT NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
 
         command.ExecuteNonQuery();

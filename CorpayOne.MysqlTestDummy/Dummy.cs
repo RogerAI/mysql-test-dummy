@@ -248,13 +248,25 @@ public static class Dummy
                      && !string.Equals(x.Name, primaryKeyName)
                      && string.IsNullOrWhiteSpace(x.ColumnDefault)).ToList();
 
-        var insertPart = $"INSERT INTO {tableName} ({string.Join(", ", requiredColumns.Select(x => $"`{x.Name}`"))}) ";
+        var isGuidPk = typeof(TId) == typeof(Guid);
+        var idInsertPartString = isGuidPk ? $"`{primaryKeyName}`, " : string.Empty;
+        var idValuesPartString = isGuidPk ? $"@{primaryKeyName}, " : string.Empty;
 
-        var valuesPart = $"VALUES ({string.Join(", ", requiredColumns.Select(x => $"@{x.Name}"))})";
+        var insertPart = $"INSERT INTO {tableName} ({idInsertPartString}{string.Join(", ", requiredColumns.Select(x => $"`{x.Name}`"))}) ";
+
+        var valuesPart = $"VALUES ({idValuesPartString}{string.Join(", ", requiredColumns.Select(x => $"@{x.Name}"))})";
 
         var previouslyLocatedFks = new Dictionary<string, TId>(StringComparer.OrdinalIgnoreCase);
 
         var dynamicParameters = new Dictionary<string, object?>();
+
+        Guid? returnedGuid = null;
+        if (isGuidPk)
+        {
+            // TODO: MySQL 8 supports auto-generation.
+            returnedGuid = Guid.NewGuid();
+            dynamicParameters[primaryKeyName] = returnedGuid.Value.ToByteArray();
+        }
 
         foreach (var column in requiredColumns)
         {
@@ -386,6 +398,11 @@ public static class Dummy
         using var finalInsertCommand = PrepareCommand(connection, insertCommand, dynamicParameters);
 
         var finalResult = finalInsertCommand.ExecuteScalar();
+
+        if (isGuidPk)
+        {
+            return (TId)(object)returnedGuid!.Value;
+        }
 
         if (!TryGetFromOptional<TId>(finalResult, out var finalId))
         {

@@ -1,3 +1,4 @@
+using System;
 using System.Threading.Tasks;
 using CorpayOne.MysqlTestDummy.Tests.Entities;
 using Dapper.Contrib.Extensions;
@@ -69,6 +70,16 @@ namespace CorpayOne.MysqlTestDummy.Tests
             var user = await conn.GetAsync<User>(order.Id);
 
             Assert.NotNull(user);
+        }
+
+        [Fact]
+        public void SimpleGuidId_BidTable_Creates()
+        {
+            var conn = _fixture.GetConnection();
+
+            var id = Dummy.CreateId<Guid>(conn, "Bids");
+
+            Assert.True(id != Guid.Empty, $"Expected id to be a non-empty guid but was {id}.");
         }
     }
 }
