@@ -238,3 +238,4 @@ _Pvt_Extensions
 
 container/data/
 /nuget.config
+/.vscode/settings.json
