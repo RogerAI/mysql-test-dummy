@@ -26,4 +26,22 @@ jobs:
     - name: Build
       run: dotnet build --no-restore
     - name: Test
-      run: dotnet test --no-build --verbosity normal
+      run: dotnet test --no-build --verbosity normal --logger "trx;LogFileName=results.trx"
+    - name: Access files
+      if: failure()
+      run: |
+        sudo chown -R $USER:$GROUP *
+   
+    - name: Test Report
+      uses: dorny/test-reporter@v1
+      if: failure()    # run this step even if previous step failed
+      with:
+        name: Test Results            # Name of the check run which will be created
+        path: '**/results.trx'   # Path to test results
+        reporter: dotnet-trx        # Format of test results
+          
+    - name: "Clean up"
+      if: always()
+      run: |
+        cd ./container
+        docker-compose down
