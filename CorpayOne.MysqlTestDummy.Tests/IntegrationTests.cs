@@ -81,5 +81,19 @@ namespace CorpayOne.MysqlTestDummy.Tests
 
             Assert.True(id != Guid.Empty, $"Expected id to be a non-empty guid but was {id}.");
         }
+
+        [Fact]
+        public async Task SimpleIntId_SetNullableColumn_SetsValue()
+        {
+            const string productSubtitle = "Ants, so many ants";
+
+            var conn = _fixture.GetConnection();
+
+            var id = Dummy.CreateId<int>(conn, "Products", new DummyOptions<int>().WithColumnValue(nameof(Product.Subtitle), productSubtitle));
+
+            var product = await conn.GetAsync<Product>(id);
+
+            Assert.Equal(productSubtitle, product.Subtitle);
+        }
     }
 }

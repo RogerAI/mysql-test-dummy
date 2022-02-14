@@ -198,55 +198,11 @@ public static class Dummy
             }
         }
 
-        var columnSchema = new List<ColumnSchemaEntry>();
-        var foreignKeySchema = new List<ForeignKeySchemaEntry>();
-
-        using var sharedCommand = PrepareCommand(connection, GetColumnSchema, parameters);
-        {
-            using (var reader = sharedCommand.ExecuteReader())
-            {
-                while (reader.Read())
-                {
-                    var colName = reader.GetString(0);
-                    var colDefault = reader.IsDBNull(1) ? null : reader.GetString(1);
-                    var isNullable = reader.IsDBNull(2) ? null : reader.GetString(2);
-                    var dataType = reader.GetString(3);
-                    var maxLength = reader.IsDBNull(4) ? default : reader.GetInt32(4);
-
-                    var entry = new ColumnSchemaEntry(colName, dataType)
-                    {
-                        ColumnDefault = colDefault,
-                        IsNullable = isNullable,
-                        MaxLength = maxLength
-                    };
-
-                    columnSchema.Add(entry);
-                }
-            }
-
-            sharedCommand.CommandText = GetForeignKeySchema;
-            using (var reader = sharedCommand.ExecuteReader())
-            {
-                while (reader.Read())
-                {
-                    var colName = reader.GetString(0);
-                    var tabName = reader.GetString(1);
-
-                    var entry = new ForeignKeySchemaEntry(colName, tabName);
-
-                    foreignKeySchema.Add(entry);
-                }
-            }
-        }
+        var (columnSchema, foreignKeySchema) = GetTableSchema(connection, parameters);
 
         var random = dummyOptions.RandomSeed.HasValue ? new Random(dummyOptions.RandomSeed.Value) : new Random();
 
-        var requiredColumns = dummyOptions.ForcePopulateOptionalColumns
-            ? columnSchema
-            : columnSchema.Where(
-                x => !x.IsActuallyNullable
-                     && !string.Equals(x.Name, primaryKeyName)
-                     && string.IsNullOrWhiteSpace(x.ColumnDefault)).ToList();
+        var requiredColumns = FilterRequiredColumns(columnSchema, primaryKeyName, dummyOptions);
 
         var isGuidPk = typeof(TId) == typeof(Guid);
         var idInsertPartString = isGuidPk ? $"`{primaryKeyName}`, " : string.Empty;
@@ -421,6 +377,81 @@ public static class Dummy
         return GetOrCreateId(connection, tableName, dummyOptions);
     }
 
+    private static List<ColumnSchemaEntry> FilterRequiredColumns<TId>(List<ColumnSchemaEntry> columns, string primaryKeyName, DummyOptions<TId> dummyOptions)
+    {
+        if (dummyOptions.ForcePopulateOptionalColumns)
+        {
+            return columns;
+        }
+
+        var result = new List<ColumnSchemaEntry>();
+
+        foreach (var column in columns)
+        {
+            if (string.Equals(column.Name, primaryKeyName))
+            {
+                continue;
+            }
+
+            if (!column.IsActuallyNullable && string.IsNullOrWhiteSpace(column.ColumnDefault))
+            {
+                result.Add(column);
+            }
+            else if (dummyOptions.ColumnValues.Any(x => string.Equals(x.ColumnName, column.Name)))
+            {
+                result.Add(column);
+            }
+        }
+
+        return result;
+    }
+
+    private static (List<ColumnSchemaEntry> columns, List<ForeignKeySchemaEntry> foreignKeys) GetTableSchema(IDbConnection connection, Dictionary<string, object?> parameters)
+    {
+        var columnSchema = new List<ColumnSchemaEntry>();
+        var foreignKeySchema = new List<ForeignKeySchemaEntry>();
+
+        using var sharedCommand = PrepareCommand(connection, GetColumnSchema, parameters);
+        {
+            using (var reader = sharedCommand.ExecuteReader())
+            {
+                while (reader.Read())
+                {
+                    var colName = reader.GetString(0);
+                    var colDefault = reader.IsDBNull(1) ? null : reader.GetString(1);
+                    var isNullable = reader.IsDBNull(2) ? null : reader.GetString(2);
+                    var dataType = reader.GetString(3);
+                    var maxLength = reader.IsDBNull(4) ? default : reader.GetInt32(4);
+
+                    var entry = new ColumnSchemaEntry(colName, dataType)
+                    {
+                        ColumnDefault = colDefault,
+                        IsNullable = isNullable,
+                        MaxLength = maxLength
+                    };
+
+                    columnSchema.Add(entry);
+                }
+            }
+
+            sharedCommand.CommandText = GetForeignKeySchema;
+            using (var reader = sharedCommand.ExecuteReader())
+            {
+                while (reader.Read())
+                {
+                    var colName = reader.GetString(0);
+                    var tabName = reader.GetString(1);
+
+                    var entry = new ForeignKeySchemaEntry(colName, tabName);
+
+                    foreignKeySchema.Add(entry);
+                }
+            }
+        }
+
+        return (columnSchema, foreignKeySchema);
+    }
+
     private static string GenerateRandomStringOfLengthOrLower(int length, Random random)
     {
         var lengthToFill = random.Next(length / 2, length);
@@ -442,6 +473,13 @@ public static class Dummy
             if (i > 0 && i % multiwordTextLength == 0)
             {
                 result += " ";
+            }
+
+            var isWhitespace = i > 0 && random.Next(0, 20) >= 15;
+            if (isWhitespace)
+            {
+                result += " ";
+                continue;
             }
 
             var isSpecial = random.Next(0, 100) > 97;
@@ -470,7 +508,7 @@ public static class Dummy
         return false;
     }
 
-    public static void AddParameter(IDbCommand command, string name, object value)
+    private static void AddParameter(IDbCommand command, string name, object value)
     {
         var parameter = command.CreateParameter();
         parameter.ParameterName = name;
