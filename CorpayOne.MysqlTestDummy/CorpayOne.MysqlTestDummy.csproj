@@ -15,7 +15,7 @@
     <RepositoryUrl>https://github.com/RogerAI/mysql-test-dummy</RepositoryUrl>
     <PackageProjectUrl>https://github.com/RogerAI/mysql-test-dummy</PackageProjectUrl>
     <PackageTags>MySQL;test;unit testing;mock data;</PackageTags>
-    <PackageId>MySQL Test Dummy</PackageId>
+    <PackageId>MySQLTestDummy</PackageId>
   </PropertyGroup>
 
 </Project>
