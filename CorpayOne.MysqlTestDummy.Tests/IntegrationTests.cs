@@ -35,7 +35,7 @@ namespace CorpayOne.MysqlTestDummy.Tests
                 string.IsNullOrWhiteSpace(product.Name),
                 $"Product name should not have been null or whitespace but was: '{product.Name}'");
 
-            Assert.True(product.SKU.Length == 12, $"Expected SKU to be 12 characters but was: {product.SKU} ({product.SKU.Length} chars)");
+            Assert.True(product.SKU.Length == 12, $"Expected SKU to be 12 characters but was: '{product.SKU}' ({product.SKU.Length} chars)");
         }
 
         [Fact]
@@ -83,13 +83,31 @@ namespace CorpayOne.MysqlTestDummy.Tests
         }
 
         [Fact]
+        public void SimpleIntId_IterateRandomSeeds_AllCreated()
+        {
+            var conn = _fixture.GetConnection();
+
+            for (var i = 4500; i < 4500 + 600; i++)
+            {
+                try
+                {
+                    Dummy.CreateId(conn, "Products", new DummyOptions<int>().WithRandomSeed(i));
+                }
+                catch (Exception ex)
+                {
+                    throw new InvalidOperationException($"Failed to create product with random seed {i}.", ex);
+                }
+            }
+        }
+
+        [Fact]
         public async Task SimpleIntId_SetNullableColumn_SetsValue()
         {
             const string productSubtitle = "Ants, so many ants";
 
             var conn = _fixture.GetConnection();
 
-            var id = Dummy.CreateId<int>(conn, "Products", new DummyOptions<int>().WithColumnValue(nameof(Product.Subtitle), productSubtitle));
+            var id = Dummy.CreateId(conn, "Products", new DummyOptions<int>().WithColumnValue(nameof(Product.Subtitle), productSubtitle));
 
             var product = await conn.GetAsync<Product>(id);
 
@@ -119,6 +137,28 @@ namespace CorpayOne.MysqlTestDummy.Tests
             var user = await conn.GetAsync<User>(order.UserId);
 
             Assert.NotNull(user);
+        }
+
+        [Fact]
+        public async Task SimpleIntId_OptionalForeignKeySpecified_UsesValue()
+        {
+            var conn = _fixture.GetConnection();
+
+            // Ignored.
+            Dummy.CreateId<int>(conn, "Users");
+            Dummy.CreateId<int>(conn, "Users");
+
+            // Used.
+            var userId = Dummy.CreateId<int>(conn, "Users");
+
+            // Ignored.
+            Dummy.CreateId<int>(conn, "Users");
+
+            var orderNoteId = Dummy.CreateId(conn, "OrderNotes", new DummyOptions<int>().WithForeignKey("UserId", userId));
+
+            var orderNote = await conn.GetAsync<OrderNote>(orderNoteId);
+
+            Assert.Equal(userId, orderNote.UserId);
         }
     }
 }

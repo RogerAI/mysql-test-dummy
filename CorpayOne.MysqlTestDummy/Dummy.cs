@@ -401,6 +401,10 @@ public static class Dummy
             {
                 result.Add(column);
             }
+            else if (dummyOptions.ForeignKeys.Any(x => string.Equals(x.ColumnName, column.Name)))
+            {
+                result.Add(column);
+            }
         }
 
         return result;
@@ -467,12 +471,14 @@ public static class Dummy
 
         const int multiwordTextLength = 30;
 
+        var isPreviousSpace = false;
         var result = string.Empty;
         for (var i = 0; i < length; i++)
         {
-            var isWhitespace = i > 0 && (random.Next(0, 20) >= 15 || i % multiwordTextLength == 0);
+            var isWhitespace = i > 0 && i < length - 2 && !isPreviousSpace && (random.Next(0, 20) >= 15 || i % multiwordTextLength == 0);
             if (isWhitespace)
             {
+                isPreviousSpace = true;
                 result += " ";
                 continue;
             }
@@ -486,7 +492,13 @@ public static class Dummy
                 character = char.ToUpperInvariant(character);
             }
 
+            isPreviousSpace = false;
             result += character;
+        }
+
+        if (result.Length != length)
+        {
+            throw new InvalidOperationException($"Tried to create string of length {length} but was '{result}' ({result.Length})");
         }
 
         return result;
