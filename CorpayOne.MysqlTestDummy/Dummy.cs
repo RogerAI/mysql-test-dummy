@@ -470,12 +470,7 @@ public static class Dummy
         var result = string.Empty;
         for (var i = 0; i < length; i++)
         {
-            if (i > 0 && i % multiwordTextLength == 0)
-            {
-                result += " ";
-            }
-
-            var isWhitespace = i > 0 && random.Next(0, 20) >= 15;
+            var isWhitespace = i > 0 && (random.Next(0, 20) >= 15 || i % multiwordTextLength == 0);
             if (isWhitespace)
             {
                 result += " ";

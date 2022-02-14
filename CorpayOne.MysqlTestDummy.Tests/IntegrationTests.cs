@@ -95,5 +95,30 @@ namespace CorpayOne.MysqlTestDummy.Tests
 
             Assert.Equal(productSubtitle, product.Subtitle);
         }
+
+        [Fact]
+        public async Task SimpleIntId_MultipleForeignKeys_SetsValue()
+        {
+            var conn = _fixture.GetConnection();
+
+            var id = Dummy.CreateId<int>(conn, "OrderNotes");
+
+            var orderNote = await conn.GetAsync<OrderNote>(id);
+
+            Assert.NotNull(orderNote.Note);
+            Assert.Null(orderNote.UserId);
+
+            var order = await conn.GetAsync<Order>(orderNote.OrderId);
+
+            Assert.NotNull(order);
+
+            var product = await conn.GetAsync<Product>(order.ProductId);
+
+            Assert.NotNull(product);
+
+            var user = await conn.GetAsync<User>(order.UserId);
+
+            Assert.NotNull(user);
+        }
     }
 }

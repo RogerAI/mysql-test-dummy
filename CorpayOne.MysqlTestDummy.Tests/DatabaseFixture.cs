@@ -62,6 +62,16 @@ public class DatabaseFixture : IDisposable
                 FOREIGN KEY `FK_Orders__ProductId` (ProductId) REFERENCES Products (Id) ON DELETE NO ACTION ON UPDATE NO ACTION
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+            CREATE TABLE OrderNotes
+            (
+                Id int(11) NOT NULL PRIMARY KEY AUTO_INCREMENT,
+                OrderId int(11) NOT NULL,
+                UserId int(11) NULL,
+                Note text NOT NULL,
+                FOREIGN KEY `FK_OrderNotes__OrderId` (OrderId) REFERENCES Orders (Id) ON DELETE CASCADE ON UPDATE NO ACTION,
+                FOREIGN KEY `FK_OrderNotes__UserId` (UserId) REFERENCES Users (Id) ON DELETE NO ACTION ON UPDATE NO ACTION
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
             CREATE TABLE Bids
             (
                 BidId binary(16) NOT NULL PRIMARY KEY,

@@ -41,4 +41,16 @@ namespace CorpayOne.MysqlTestDummy.Tests.Entities
 
         public int ProductId { get; set; }
     }
+
+    [Table("OrderNotes")]
+    internal class OrderNote
+    {
+        public int Id { get; set; }
+
+        public int OrderId { get; set; }
+
+        public int? UserId { get; set; }
+
+        public string Note { get; set; }
+    }
 }
