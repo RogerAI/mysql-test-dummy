@@ -160,5 +160,24 @@ namespace CorpayOne.MysqlTestDummy.Tests
 
             Assert.Equal(userId, orderNote.UserId);
         }
+
+        [Fact]
+        public async Task SimpleIntId_ForcePopulate_Creates()
+        {
+            var conn = _fixture.GetConnection();
+
+            var productId = Dummy.CreateId(
+                conn,
+                "Products",
+                new DummyOptions<int>
+                {
+                    ForcePopulateOptionalColumns = true
+                });
+
+            var product = await conn.GetAsync<Product>(productId);
+
+            Assert.NotNull(product);
+            Assert.NotNull(product.SKU);
+        }
     }
 }

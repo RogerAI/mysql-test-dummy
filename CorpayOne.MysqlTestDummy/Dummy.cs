@@ -226,30 +226,27 @@ public static class Dummy
 
         foreach (var column in requiredColumns)
         {
-            var overrideValue = dummyOptions.ColumnValues.FirstOrDefault(x => string.Equals(x.ColumnName, column.Name, StringComparison.OrdinalIgnoreCase));
+            var hasOverride = dummyOptions.ColumnValues.TryGetValue(column.Name, out var overrideValue);
 
-            object? value = overrideValue?.Value;
+            object? value = overrideValue;
 
-            if (overrideValue == null)
+            if (!hasOverride)
             {
                 switch (column.DataType.ToLowerInvariant())
                 {
                     case "int":
                     case "double":
                     case "bigint":
-                        var match = dummyOptions.ForeignKeys.FirstOrDefault(
-                            x => string.Equals(x.ColumnName, column.Name, StringComparison.OrdinalIgnoreCase));
-
-                        if (match != null)
+                        if (dummyOptions.ForeignKeys.TryGetValue(column.Name, out var matchId))
                         {
-                            value = match.Value;
+                            value = matchId;
                             break;
                         }
 
                         var referencedFk =
                             foreignKeySchema.FirstOrDefault(
-                                x => string.Equals(x.ColumnName, column.Name, StringComparison.OrdinalIgnoreCase)
-                                     && !string.Equals(x.TargetTableName, tableName, StringComparison.OrdinalIgnoreCase));
+                                x => string.Equals(x.ColumnName, column.Name)
+                                     && !string.Equals(x.TargetTableName, tableName));
 
                         if (referencedFk != null)
                         {
@@ -308,7 +305,7 @@ public static class Dummy
                         else if (FactoryIfColumnNamed(
                                      column,
                                      "Email",
-                                     GenerateRandomStringOfLengthOrLower(20, random) + dummyOptions.DefaultEmailDomain,
+                                     GenerateRandomStringOfLengthOrLower(20, random, false) + dummyOptions.DefaultEmailDomain,
                                      ref value))
                         {
                         }
@@ -325,13 +322,13 @@ public static class Dummy
                         else
                         {
                             value = (column.MaxLength.HasValue && column.MaxLength < 200)
-                                ? GenerateRandomStringOfLengthOrLower(column.MaxLength.Value, random)
-                                : GenerateRandomStringOfLengthOrLower(90, random);
+                                ? GenerateRandomStringOfLengthOrLower(column.MaxLength.Value, random, true)
+                                : GenerateRandomStringOfLengthOrLower(90, random, true);
                         }
 
                         break;
                     case "char":
-                        value = GenerateRandomStringOfLength(column.MaxLength.GetValueOrDefault(), random);
+                        value = GenerateRandomStringOfLength(column.MaxLength.GetValueOrDefault(), random, false);
                         break;
                     case "tinyint":
                         value = 0;
@@ -353,7 +350,15 @@ public static class Dummy
 
         using var finalInsertCommand = PrepareCommand(connection, insertCommand, dynamicParameters);
 
-        var finalResult = finalInsertCommand.ExecuteScalar();
+        object? finalResult;
+        try
+        {
+            finalResult = finalInsertCommand.ExecuteScalar();
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"Failed to execute insert into {tableName} with statement {insertCommand}.", ex);
+        }
 
         if (isGuidPk)
         {
@@ -381,7 +386,7 @@ public static class Dummy
     {
         if (dummyOptions.ForcePopulateOptionalColumns)
         {
-            return columns;
+            return columns.Where(x => !string.Equals(x.Name, primaryKeyName)).ToList();
         }
 
         var result = new List<ColumnSchemaEntry>();
@@ -397,11 +402,11 @@ public static class Dummy
             {
                 result.Add(column);
             }
-            else if (dummyOptions.ColumnValues.Any(x => string.Equals(x.ColumnName, column.Name)))
+            else if (dummyOptions.ColumnValues.Any(x => string.Equals(x.Key, column.Name)))
             {
                 result.Add(column);
             }
-            else if (dummyOptions.ForeignKeys.Any(x => string.Equals(x.ColumnName, column.Name)))
+            else if (dummyOptions.ForeignKeys.Any(x => string.Equals(x.Key, column.Name)))
             {
                 result.Add(column);
             }
@@ -456,14 +461,14 @@ public static class Dummy
         return (columnSchema, foreignKeySchema);
     }
 
-    private static string GenerateRandomStringOfLengthOrLower(int length, Random random)
+    private static string GenerateRandomStringOfLengthOrLower(int length, Random random, bool allowWhitespace)
     {
         var lengthToFill = random.Next(length / 2, length);
 
-        return GenerateRandomStringOfLength(lengthToFill, random);
+        return GenerateRandomStringOfLength(lengthToFill, random, allowWhitespace);
     }
 
-    private static string GenerateRandomStringOfLength(int length, Random random)
+    private static string GenerateRandomStringOfLength(int length, Random random, bool allowWhitespace)
     {
         // Alphabetical characters with duplicates for English letter distribution plus some bonus Unicode values.
         const string chars = "aabcdeeeefghhijklmmnnoopqrrsstttuvwxyz";
@@ -475,7 +480,7 @@ public static class Dummy
         var result = string.Empty;
         for (var i = 0; i < length; i++)
         {
-            var isWhitespace = i > 0 && i < length - 2 && !isPreviousSpace && (random.Next(0, 20) >= 15 || i % multiwordTextLength == 0);
+            var isWhitespace = allowWhitespace && i > 0 && i < length - 2 && !isPreviousSpace && (random.Next(0, 20) >= 15 || i % multiwordTextLength == 0);
             if (isWhitespace)
             {
                 isPreviousSpace = true;

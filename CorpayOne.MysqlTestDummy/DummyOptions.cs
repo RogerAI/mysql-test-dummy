@@ -14,12 +14,12 @@ public class DummyOptions<TId>
     /// <summary>
     /// Override values for any columns that would otherwise be automatically populated.
     /// </summary>
-    public List<ColumnValue> ColumnValues { get; set; } = new ();
+    public Dictionary<string, object?> ColumnValues { get; set; } = new ();
 
     /// <summary>
     /// Override any foreign keys that would otherwise be automatically populated.
     /// </summary>
-    public List<ForeignKeyValue> ForeignKeys { get; set; } = new ();
+    public Dictionary<string, TId> ForeignKeys { get; set; } = new ();
 
     /// <summary>
     /// Overrides the seed used for random data generation to populate columns.
@@ -48,18 +48,18 @@ public class DummyOptions<TId>
 
     public DummyOptions<TId> WithForeignKey(string columnName, TId value)
     {
-        ForeignKeys ??= new List<ForeignKeyValue>();
+        ForeignKeys ??= new Dictionary<string, TId>();
 
-        ForeignKeys.Add(new ForeignKeyValue(columnName, value));
+        ForeignKeys[columnName] = value;
 
         return this;
     }
 
     public DummyOptions<TId> WithColumnValue(string columnName, object? value)
     {
-        ColumnValues ??= new List<ColumnValue>();
+        ColumnValues ??= new();
 
-        ColumnValues.Add(new ColumnValue(columnName, value));
+        ColumnValues[columnName] = value;
 
         return this;
     }
@@ -76,41 +76,22 @@ public class DummyOptions<TId>
         return this;
     }
 
-    /// <summary>
-    /// Used to hardcode the value of the foreign key if you have an existing entity you want linked.
-    /// </summary>
-    public class ForeignKeyValue
+    public DummyOptions<TId> MustForcePopulateOptionalColumns()
     {
-        /// <summary>
-        /// The column for the foreign key to hardcode.
-        /// </summary>
-        public string ColumnName { get; }
-
-        /// <summary>
-        /// The identifier for the foreign key to hardcode.
-        /// </summary>
-        public TId Value { get; }
-
-        /// <summary>
-        /// Create a new <see cref="ForeignKeyValue"/>.
-        /// </summary>
-        public ForeignKeyValue(string columnName, TId value)
-        {
-            ColumnName = columnName;
-            Value = value;
-        }
+        ForcePopulateOptionalColumns = true;
+        return this;
     }
 
-    public class ColumnValue
-    {
-        public string ColumnName { get; }
-
-        public object? Value { get; }
-
-        public ColumnValue(string columnName, object? value)
+    public DummyOptions<TId> Clone() =>
+        new DummyOptions<TId>
         {
-            ColumnName = columnName;
-            Value = value;
-        }
-    }
+            ColumnValues = new Dictionary<string, object?>(ColumnValues ?? new()),
+            DatabaseName = DatabaseName,
+            DefaultEmailDomain = DefaultEmailDomain,
+            DefaultUrl = DefaultUrl,
+            ForceCreate = ForceCreate,
+            ForcePopulateOptionalColumns = ForcePopulateOptionalColumns,
+            ForeignKeys = new Dictionary<string, TId>(ForeignKeys ?? new()),
+            RandomSeed = RandomSeed
+        };
 }
