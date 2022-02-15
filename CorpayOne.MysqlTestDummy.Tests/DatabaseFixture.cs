@@ -77,6 +77,14 @@ public class DatabaseFixture : IDisposable
                 BidId binary(16) NOT NULL PRIMARY KEY,
                 Amount bigint(20) NOT NULL,
                 Note varchar(64) NOT NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+            CREATE TABLE Node
+            (
+                Id bigint(20) NOT NULL PRIMARY KEY AUTO_INCREMENT,
+                Value tinyint NOT NULL,
+                ParentId bigint(20) NULL,
+                FOREIGN KEY `FK_Node__ParentId` (ParentId) REFERENCES Node (Id) ON DELETE CASCADE ON UPDATE NO ACTION
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
 
         command.ExecuteNonQuery();

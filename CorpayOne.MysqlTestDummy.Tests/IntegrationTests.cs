@@ -179,5 +179,44 @@ namespace CorpayOne.MysqlTestDummy.Tests
             Assert.NotNull(product);
             Assert.NotNull(product.SKU);
         }
+
+        [Fact]
+        public async Task SimpleIntId_RecursiveTable_Creates()
+        {
+            var conn = _fixture.GetConnection();
+
+            var nodeId = Dummy.CreateId<int>(
+                conn,
+                "Node");
+
+            var node = await conn.GetAsync<Node>(nodeId);
+
+            Assert.NotNull(node);
+
+            Assert.Null(node.ParentId);
+        }
+
+        [Fact]
+        public async Task SimpleIntId_RecursiveTableForcePopulate_Creates()
+        {
+            var conn = _fixture.GetConnection();
+
+            var nodeId = Dummy.CreateId(
+                conn,
+                "Node",
+                new DummyOptions<int>().MustForcePopulateOptionalColumns());
+
+            var node = await conn.GetAsync<Node>(nodeId);
+
+            Assert.NotNull(node);
+
+            Assert.NotNull(node.ParentId);
+
+            var parent = await conn.GetAsync<Node>(node.ParentId.Value);
+
+            Assert.NotNull(parent);
+
+            Assert.Null(parent.ParentId);
+        }
     }
 }
