@@ -151,7 +151,6 @@ public static class Dummy
             return !string.IsNullOrWhiteSpace(s);
         }
 
-        // TODO: Guids.
         if (idType == typeof(Guid))
         {
             return false;
