@@ -311,6 +311,7 @@ public static class Dummy
                     case "varchar":
                     case "text":
                     case "longtext":
+                    case "char":
                         if (FactoryIfColumnNamed(column, "Country", "US", ref value))
                         {
                         }
@@ -337,16 +338,16 @@ public static class Dummy
                         else if (FactoryIfColumnNamed(column, "Iban", "DK5000400440116243", ref value))
                         {
                         }
+                        else if (string.Equals(column.DataType, "char", StringComparison.OrdinalIgnoreCase))
+                        {
+                            value = GenerateRandomStringOfLength(column.MaxLength.GetValueOrDefault(), random, false);
+                        }
                         else
                         {
                             value = (column.MaxLength.HasValue && column.MaxLength < 200)
                                 ? GenerateRandomStringOfLengthOrLower(column.MaxLength.Value, random, true)
                                 : GenerateRandomStringOfLengthOrLower(90, random, true);
                         }
-
-                        break;
-                    case "char":
-                        value = GenerateRandomStringOfLength(column.MaxLength.GetValueOrDefault(), random, false);
                         break;
                     case "tinyint":
                         value = random.Next(2);
@@ -529,6 +530,11 @@ public static class Dummy
 
     private static bool FactoryIfColumnNamed(ColumnSchemaEntry column, string snippet, object newValue, ref object? obj)
     {
+        if (column.MaxLength.HasValue && newValue is string strVal && column.MaxLength.Value > strVal.Length)
+        {
+            return false;
+        }
+
         if (column.Name.Contains(snippet, StringComparison.OrdinalIgnoreCase))
         {
             obj = newValue;

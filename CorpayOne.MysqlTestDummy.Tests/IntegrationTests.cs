@@ -55,6 +55,22 @@ namespace CorpayOne.MysqlTestDummy.Tests
         }
 
         [Fact]
+        public async Task SimpleIntId_UserTable_SetsCountryColumn()
+        {
+            var conn = _fixture.GetConnection();
+
+            var id = Dummy.CreateId<int>(conn, "Users");
+
+            Assert.True(id > 0, $"Expected id to be greater than zero but was {id}.");
+
+            var user = await conn.GetAsync<User>(id);
+
+            Assert.NotNull(user);
+
+            Assert.Equal("US", user.Country);
+        }
+
+        [Fact]
         public async Task SimpleIntId_OrderTable_Creates()
         {
             var conn = _fixture.GetConnection();
