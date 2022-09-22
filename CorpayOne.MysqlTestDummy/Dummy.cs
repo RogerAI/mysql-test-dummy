@@ -387,16 +387,6 @@ public static class Dummy
         DummyOptions dummyOptions)
     {
         var isComposite = columns.Count(x => x.IsPrimary) > 1;
-        // Check guid is required generated.
-        if (dummyOptions.ForcePopulateOptionalColumns)
-        {
-            if (isComposite)
-            {
-                return columns;
-            }
-
-            return columns.Where(x => !x.IsPrimary || (x.IsPrimary && !x.Auto)).ToList();
-        }
 
         var result = new List<ColumnSchemaEntry>();
 
@@ -416,7 +406,11 @@ public static class Dummy
                 continue;
             }
 
-            if (!column.IsActuallyNullable && string.IsNullOrWhiteSpace(column.ColumnDefault))
+            if (dummyOptions.ForcePopulateOptionalColumns)
+            {
+                result.Add(column);
+            }
+            else if (!column.IsActuallyNullable && string.IsNullOrWhiteSpace(column.ColumnDefault))
             {
                 result.Add(column);
             }
