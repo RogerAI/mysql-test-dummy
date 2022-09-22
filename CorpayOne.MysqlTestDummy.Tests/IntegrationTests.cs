@@ -255,5 +255,59 @@ namespace CorpayOne.MysqlTestDummy.Tests
 
             Assert.NotNull(userCategory);
         }
+
+        [Fact]
+        public async Task CompoundId_TupleClass_Creates()
+        {
+            var conn = _fixture.GetConnection();
+
+            var id = Dummy.CreateId<Tuple<int, int>>(
+                conn,
+                "UserCategories");
+
+            var userCategory = await conn.QueryAsync<UserCategory>(
+                "SELECT * FROM UserCategories WHERE UserId = @userId AND CategoryId = @categoryId",
+                new
+                {
+                    userId = id.Item1,
+                    categoryId = id.Item2
+                });
+
+            Assert.NotNull(userCategory);
+        }
+
+        [Fact]
+        public async Task CompoundId_CreateTwice_CreatesUnique()
+        {
+            var conn = _fixture.GetConnection();
+
+            var id1 = Dummy.CreateId<(int, int)>(
+                conn,
+                "UserCategories");
+            var id2 = Dummy.CreateId<(int, int)>(
+                conn,
+                "UserCategories");
+
+            Assert.NotEqual(id1, id2);
+
+            var userCategory1 = await conn.QueryAsync<UserCategory>(
+                "SELECT * FROM UserCategories WHERE UserId = @userId AND CategoryId = @categoryId",
+                new
+                {
+                    userId = id1.Item1,
+                    categoryId = id1.Item2
+                });
+
+            var userCategory2 = await conn.QueryAsync<UserCategory>(
+                "SELECT * FROM UserCategories WHERE UserId = @userId AND CategoryId = @categoryId",
+                new
+                {
+                    userId = id2.Item1,
+                    categoryId = id2.Item2
+                });
+
+            Assert.NotNull(userCategory1);
+            Assert.NotNull(userCategory2);
+        }
     }
 }

@@ -26,7 +26,7 @@ public static class Dummy
                     AND     TABLE_SCHEMA = @schema
                     AND     REFERENCED_TABLE_NAME IS NOT NULL;";
 
-    private static string GetSchemaName<TId>(IDbConnection connection, DummyOptions<TId>? dummyOptions = null)
+    private static string GetSchemaName(IDbConnection connection, DummyOptions? dummyOptions = null)
     {
         if (!string.IsNullOrWhiteSpace(dummyOptions?.DatabaseName))
         {
@@ -41,7 +41,7 @@ public static class Dummy
         if (!builder.TryGetValue("database", out var databaseName) || databaseName is not string dbName || string.IsNullOrWhiteSpace(dbName))
         {
             throw new InvalidOperationException(
-                $"Cannot establish the desired database name from the provided connection, you can provide it in {nameof(DummyOptions<TId>.DatabaseName)} instead.");
+                $"Cannot establish the desired database name from the provided connection, you can provide it in {nameof(DummyOptions.DatabaseName)} instead.");
         }
 
         return dbName;
@@ -78,9 +78,21 @@ public static class Dummy
         return GetOrCreateId(connection, tableName, dummyOptions);
     }
 
-    public static TId GetOrCreateId<TId>(IDbConnection connection, string tableName, DummyOptions<TId>? dummyOptions = null)
+    public static TId GetOrCreateId<TId>(
+        IDbConnection connection,
+        string tableName,
+        DummyOptions<TId>? dummyOptions = null)
     {
-        dummyOptions ??= new DummyOptions<TId>();
+        return (TId)GetOrCreateId(typeof(TId), connection, tableName, dummyOptions);
+    }
+
+    public static object GetOrCreateId(
+        Type idType,
+        IDbConnection connection,
+        string tableName,
+        DummyOptions? dummyOptions = null)
+    {
+        dummyOptions ??= new DummyOptions(idType);
 
         var schemaName = GetSchemaName(connection, dummyOptions);
 
@@ -107,7 +119,8 @@ public static class Dummy
         if (!dummyOptions.ForceCreate)
         {
             var colsSelect = string.Join(", ", primaryKeyColumns.Select(x => x.EscapedColumnName));
-            if (TryReadExistingRecord<TId>(
+            if (TryReadExistingRecord(
+                    idType,
                     connection,
                     $"SELECT {colsSelect} FROM `{tableName}` LIMIT 1;",
                     null, out var existingResult))
@@ -287,7 +300,8 @@ public static class Dummy
             dynamicParameters.Add(column.Name, value);
         }
 
-        return CreateFinal<TId>(
+        return CreateFinal(
+            idType,
             connection,
             primaryKeyColumns,
             insertPart,
@@ -296,11 +310,12 @@ public static class Dummy
             tableName);
     }
 
-    private static bool TryReadExistingRecord<TId>(
+    private static bool TryReadExistingRecord(
+        Type type,
         IDbConnection connection,
         string sql,
         Dictionary<string, object?>? parameters,
-        out TId? result)
+        out object? result)
     {
         result = default;
 
@@ -310,7 +325,7 @@ public static class Dummy
 
         while (reader.Read())
         {
-            if (IdMapper.TryReadOptional<TId>(reader, out result))
+            if (IdMapper.TryReadOptional(type, reader, out result))
             {
                 return true;
             }
@@ -319,7 +334,8 @@ public static class Dummy
         return false;
     }
 
-    private static TId CreateFinal<TId>(
+    private static object CreateFinal(
+        Type type,
         IDbConnection connection,
         IReadOnlyList<ColumnSchemaEntry> primaryKeys,
         string insertPart,
@@ -353,7 +369,7 @@ public static class Dummy
                     $"Failed to execute insert into {tableName} with statement {insertCommand}.");
             }
 
-            if (!IdMapper.TryReadOptional<TId>(insertReader, out var finalId))
+            if (!IdMapper.TryReadOptional(type, insertReader, out var finalId))
             {
                 throw new InvalidOperationException($"Failed to execute insert into {tableName} with statement {insertCommand}.");
             }
@@ -366,9 +382,9 @@ public static class Dummy
         }
     }
 
-    private static List<ColumnSchemaEntry> FilterRequiredColumns<TId>(
+    private static List<ColumnSchemaEntry> FilterRequiredColumns(
         List<ColumnSchemaEntry> columns,
-        DummyOptions<TId> dummyOptions)
+        DummyOptions dummyOptions)
     {
         var isComposite = columns.Count(x => x.IsPrimary) > 1;
         // Check guid is required generated.

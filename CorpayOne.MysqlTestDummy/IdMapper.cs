@@ -4,25 +4,24 @@ namespace CorpayOne.MysqlTestDummy
 {
     internal static class IdMapper
     {
-        public static bool TryReadOptional<TId>(IDataRecord reader, out TId? id)
+        public static bool TryReadOptional(Type type, IDataRecord reader, out object? id)
         {
             id = default;
 
-            if (typeof(TId) == typeof(int))
+            if (type == typeof(int))
             {
-                if (TryReadSimpleType(0, reader, typeof(TId), out var obj) && obj is TId t)
+                if (TryReadSimpleType(0, reader, type, out var obj))
                 {
-                    id = t;
+                    id = obj;
                     return true;
                 }
             }
 
-            if (IsTupleType<TId>())
+            if (IsValueTupleType(type))
             {
-                var generic = typeof(TId);
-                var fields = generic.GenericTypeArguments;
+                var fields = type.GenericTypeArguments;
 
-                var instance = (object) Activator.CreateInstance<TId>()!;
+                var instance = Activator.CreateInstance(type)!;
                 for (var i = 0; i < fields.Length; i++)
                 {
                     var fieldType = fields[i];
@@ -31,18 +30,39 @@ namespace CorpayOne.MysqlTestDummy
                         return false;
                     }
 
-                    var f = generic.GetField($"Item{i + 1}");
+                    var f = type.GetField($"Item{i + 1}");
                     f.SetValue(instance, fieldVal);
                 }
 
-                id = (TId?)instance;
+                id = instance;
 
                 return true;
             }
 
-            if (TryReadSimpleType(0, reader, typeof(TId), out var objResult) && objResult is TId tResult)
+            if (IsTupleType(type))
             {
-                id = tResult;
+                var fields = type.GenericTypeArguments;
+                var values = new object?[fields.Length];
+
+                for (var i = 0; i < fields.Length; i++)
+                {
+                    var fieldType = fields[i];
+                    if (!TryReadSimpleType(i, reader, fieldType, out var fieldVal))
+                    {
+                        return false;
+                    }
+
+                    values[i] = fieldVal;
+                }
+
+                id = type.GetConstructor(fields)!.Invoke(values);
+
+                return true;
+            }
+
+            if (TryReadSimpleType(0, reader, type, out var objResult))
+            {
+                id = objResult;
                 return true;
             }
 
@@ -137,17 +157,15 @@ namespace CorpayOne.MysqlTestDummy
             return false;
         }
 
-        private static bool IsTupleType<TId>()
+        private static bool IsValueTupleType(Type type)
         {
-            var type = typeof(TId);
-
             if (!type.IsGenericType)
             {
                 return false;
             }
 
             var genericType = type.GetGenericTypeDefinition();
-            
+
             if (genericType == typeof(ValueTuple<>))
             {
                 return true;
@@ -187,7 +205,19 @@ namespace CorpayOne.MysqlTestDummy
             {
                 return true;
             }
-            
+
+            return false;
+        }
+
+        public static bool IsTupleType(Type t)
+        {
+            if (!t.IsGenericType)
+            {
+                return false;
+            }
+
+            var genericType = t.GetGenericTypeDefinition();
+
             if (genericType == typeof(Tuple<>))
             {
                 return true;
