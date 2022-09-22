@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using CorpayOne.MysqlTestDummy.Tests.Entities;
+using Dapper;
 using Dapper.Contrib.Extensions;
 using Xunit;
 
@@ -233,6 +234,26 @@ namespace CorpayOne.MysqlTestDummy.Tests
             Assert.NotNull(parent);
 
             Assert.Null(parent.ParentId);
+        }
+
+        [Fact]
+        public async Task CompoundId_SimpleData_Creates()
+        {
+            var conn = _fixture.GetConnection();
+
+            var id = Dummy.CreateId<(int, int)>(
+                conn,
+                "UserCategories");
+
+            var userCategory = await conn.QueryAsync<UserCategory>(
+                "SELECT * FROM UserCategories WHERE UserId = @userId AND CategoryId = @categoryId",
+                new
+                {
+                    userId = id.Item1,
+                    categoryId = id.Item2
+                });
+
+            Assert.NotNull(userCategory);
         }
     }
 }

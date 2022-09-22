@@ -6,26 +6,19 @@ namespace CorpayOne.MysqlTestDummy;
 
 public static class Dummy
 {
-    // TODO: composite PKs?
-    private const string GetPrimaryKey =
-        @"      SELECT  COLUMN_NAME
-                    FROM    INFORMATION_SCHEMA.COLUMNS
-                    WHERE   TABLE_SCHEMA = @schema
-                    AND     TABLE_NAME = @table
-                    AND COLUMN_KEY = 'PRI'
-                    LIMIT 1;";
-
-    private const string GetColumnSchema =
+    private const string GetColumnSchemaSql =
         @"      SELECT  COLUMN_NAME as Name,
                             COLUMN_DEFAULT as ColumnDefault,
                             IS_NULLABLE as IsNullable,
                             DATA_TYPE as DataType,
-                            CHARACTER_MAXIMUM_LENGTH as MaxLength
+                            CHARACTER_MAXIMUM_LENGTH as MaxLength,
+                            (COLUMN_KEY = 'PRI') as IsPrimary,
+                            (EXTRA = 'auto_increment') as Auto
                     FROM    INFORMATION_SCHEMA.COLUMNS
                     WHERE   TABLE_NAME = @table
                     AND     TABLE_SCHEMA = @schema;";
 
-    private const string GetForeignKeySchema =
+    private const string GetForeignKeySchemaSql =
         @"      SELECT  COLUMN_NAME as ColumnName,
                             REFERENCED_TABLE_NAME as TargetTableName
                     FROM    INFORMATION_SCHEMA.KEY_COLUMN_USAGE
@@ -76,87 +69,13 @@ public static class Dummy
         return command;
     }
 
-    private static bool TryGetFromOptional<TId>(object? value, out TId? id)
+    public static TId CreateId<TId>(IDbConnection connection, string tableName, DummyOptions<TId>? dummyOptions = null)
     {
-        id = default;
+        dummyOptions ??= new DummyOptions<TId>();
 
-        if (value == null)
-        {
-            return false;
-        }
+        dummyOptions.ForceCreate = true;
 
-        var idType = typeof(TId);
-
-        if (idType == typeof(int))
-        {
-            switch (value)
-            {
-                case int i:
-                    id = (TId)(object)i;
-                    break;
-                case long l:
-                    id = (TId)(object)(int)l;
-                    break;
-                case uint u:
-                    id = (TId)(object)(int)u;
-                    break;
-                case ulong ul:
-                    id = (TId)(object)(int)ul;
-                    break;
-                case short sh:
-                    id = (TId)(object)(int)sh;
-                    break;
-                case ushort us:
-                    id = (TId)(object)(int)us;
-                    break;
-                default:
-                    return false;
-            }
-
-            return true;
-        }
-
-        if (idType == typeof(long))
-        {
-            switch (value)
-            {
-                case int i:
-                    id = (TId)(object)(long)i;
-                    break;
-                case long l:
-                    id = (TId)(object)l;
-                    break;
-                case uint u:
-                    id = (TId)(object)(long)u;
-                    break;
-                case ulong ul:
-                    id = (TId)(object)(long)ul;
-                    break;
-                case short sh:
-                    id = (TId)(object)(long)sh;
-                    break;
-                case ushort us:
-                    id = (TId)(object)(long)us;
-                    break;
-                default:
-                    return false;
-            }
-
-            return true;
-        }
-
-        if (idType == typeof(string) && value is string s)
-        {
-            id = (TId)(object)s;
-            return !string.IsNullOrWhiteSpace(s);
-        }
-
-        if (idType == typeof(Guid))
-        {
-            return false;
-        }
-
-        return false;
+        return GetOrCreateId(connection, tableName, dummyOptions);
     }
 
     public static TId GetOrCreateId<TId>(IDbConnection connection, string tableName, DummyOptions<TId>? dummyOptions = null)
@@ -176,52 +95,44 @@ public static class Dummy
             { "table", tableName }
         };
 
-        using var command = PrepareCommand(connection, GetPrimaryKey, parameters);
+        var (columnSchema, foreignKeySchema) = GetTableSchema(connection, parameters);
 
-        var primaryKeyName = command.ExecuteScalar() as string;
+        var primaryKeyColumns = columnSchema.Where(x => x.IsPrimary).ToList();
 
-        if (string.IsNullOrWhiteSpace(primaryKeyName))
+        if (primaryKeyColumns.Count == 0)
         {
-            throw new InvalidOperationException($"Could not find primary key column name on {schemaName}.{tableName}");
+            throw new InvalidOperationException($"Could not find primary key column name(s) on {schemaName}.{tableName}");
         }
 
         if (!dummyOptions.ForceCreate)
         {
-            using var idCommand = PrepareCommand(connection, $"SELECT {primaryKeyName} FROM {tableName} LIMIT 1;");
-
-            var id = idCommand.ExecuteScalar();
-
-            if (TryGetFromOptional<TId>(id, out var result))
+            var colsSelect = string.Join(", ", primaryKeyColumns.Select(x => x.EscapedColumnName));
+            if (TryReadExistingRecord<TId>(
+                    connection,
+                    $"SELECT {colsSelect} FROM `{tableName}` LIMIT 1;",
+                    null, out var existingResult))
             {
-                return result!;
+                return existingResult!;
             }
         }
 
-        var (columnSchema, foreignKeySchema) = GetTableSchema(connection, parameters);
-
         var random = dummyOptions.RandomSeed.HasValue ? new Random(dummyOptions.RandomSeed.Value) : new Random();
 
-        var requiredColumns = FilterRequiredColumns(columnSchema, primaryKeyName, dummyOptions);
+        var requiredColumns = FilterRequiredColumns(columnSchema, dummyOptions);
 
-        var isGuidPk = typeof(TId) == typeof(Guid);
-        var idInsertPartString = isGuidPk ? $"`{primaryKeyName}`, " : string.Empty;
-        var idValuesPartString = isGuidPk ? $"@{primaryKeyName}, " : string.Empty;
+        var colNameList = requiredColumns.Select(x => x.EscapedColumnName);
 
-        var insertPart = $"INSERT INTO {tableName} ({idInsertPartString}{string.Join(", ", requiredColumns.Select(x => $"`{x.Name}`"))}) ";
+        var paramNameList = requiredColumns.Select(x => x.ParamName);
 
-        var valuesPart = $"VALUES ({idValuesPartString}{string.Join(", ", requiredColumns.Select(x => $"@{x.Name}"))})";
+        var colNamePart = string.Join(", ", colNameList);
+        var paramNamePart = string.Join(", ", paramNameList);
 
-        var previouslyLocatedFks = new Dictionary<string, TId>(StringComparer.OrdinalIgnoreCase);
+        var insertPart = $"INSERT INTO `{tableName}` ({colNamePart}) ";
+        var valuesPart = $"VALUES ({paramNamePart})";
+
+        var previouslyLocatedFks = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
 
         var dynamicParameters = new Dictionary<string, object?>();
-
-        Guid? returnedGuid = null;
-        if (isGuidPk)
-        {
-            // TODO: MySQL 8 supports auto-generation.
-            returnedGuid = Guid.NewGuid();
-            dynamicParameters[primaryKeyName] = returnedGuid.Value.ToByteArray();
-        }
 
         foreach (var column in requiredColumns)
         {
@@ -253,12 +164,13 @@ public static class Dummy
                                 break;
                             }
 
-                            DummyOptions<TId> foreignKeyCreateOptions;
+                            // TODO: support non-integer FKs here.
+                            DummyOptions<int> foreignKeyCreateOptions;
 
                             var isSelfReferential = string.Equals(referencedFk.TargetTableName, tableName);
                             if (isSelfReferential)
                             {
-                                foreignKeyCreateOptions = new DummyOptions<TId>
+                                foreignKeyCreateOptions = new DummyOptions<int>
                                 {
                                     DatabaseName = dummyOptions.DatabaseName,
                                     DefaultEmailDomain = dummyOptions.DefaultEmailDomain,
@@ -270,7 +182,7 @@ public static class Dummy
                             }
                             else
                             {
-                                foreignKeyCreateOptions = new DummyOptions<TId>
+                                foreignKeyCreateOptions = new DummyOptions<int>
                                 {
                                     DatabaseName = dummyOptions.DatabaseName,
                                     DefaultUrl = dummyOptions.DefaultUrl,
@@ -359,60 +271,131 @@ public static class Dummy
                     case "date":
                         value = DateTime.UtcNow.Date;
                         break;
+                    case "binary":
+                        if (column.MaxLength == 16)
+                        {
+                            value = Guid.NewGuid().ToByteArray();
+                        }
+                        else if (column.MaxLength.HasValue)
+                        {
+                            value = new byte[column.MaxLength.Value];
+                        }
+                        break;
                 }
             }
 
             dynamicParameters.Add(column.Name, value);
         }
 
-        var insertCommand = $"{insertPart}{valuesPart}; SELECT LAST_INSERT_ID();";
+        return CreateFinal<TId>(
+            connection,
+            primaryKeyColumns,
+            insertPart,
+            valuesPart,
+            dynamicParameters,
+            tableName);
+    }
 
-        using var finalInsertCommand = PrepareCommand(connection, insertCommand, dynamicParameters);
+    private static bool TryReadExistingRecord<TId>(
+        IDbConnection connection,
+        string sql,
+        Dictionary<string, object?>? parameters,
+        out TId? result)
+    {
+        result = default;
 
-        object? finalResult;
+        using var idCommand = PrepareCommand(connection, sql, parameters);
+
+        using var reader = idCommand.ExecuteReader();
+
+        while (reader.Read())
+        {
+            if (IdMapper.TryReadOptional<TId>(reader, out result))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static TId CreateFinal<TId>(
+        IDbConnection connection,
+        IReadOnlyList<ColumnSchemaEntry> primaryKeys,
+        string insertPart,
+        string valuesPart,
+        Dictionary<string, object?> dynamicParameters,
+        string tableName)
+    {
+        var useLastInsert = primaryKeys.Count == 1 && primaryKeys[0].Auto;
+
+        string insertCommand = string.Empty;
         try
         {
-            finalResult = finalInsertCommand.ExecuteScalar();
+            if (useLastInsert)
+            {
+                insertCommand = $"{insertPart}{valuesPart}; SELECT LAST_INSERT_ID();";
+            }
+            else
+            {
+                var colsList = string.Join(", ", primaryKeys.Select(x => x.EscapedColumnName));
+                var filters = string.Join(" AND ", primaryKeys.Select(x => $"{x.EscapedColumnName} = {x.ParamName}"));
+                var selectPostInsert = $"SELECT {colsList} FROM {tableName} WHERE {filters};";
+                insertCommand = $"{insertPart}{valuesPart};{selectPostInsert}";
+            }
+
+            using var finalInsertCommand = PrepareCommand(connection, insertCommand, dynamicParameters);
+            using var insertReader = finalInsertCommand.ExecuteReader();
+
+            if (!insertReader.Read())
+            {
+                throw new InvalidOperationException(
+                    $"Failed to execute insert into {tableName} with statement {insertCommand}.");
+            }
+
+            if (!IdMapper.TryReadOptional<TId>(insertReader, out var finalId))
+            {
+                throw new InvalidOperationException($"Failed to execute insert into {tableName} with statement {insertCommand}.");
+            }
+
+            return finalId!;
         }
         catch (Exception ex)
         {
             throw new InvalidOperationException($"Failed to execute insert into {tableName} with statement {insertCommand}.", ex);
         }
-
-        if (isGuidPk)
-        {
-            return (TId)(object)returnedGuid!.Value;
-        }
-
-        if (!TryGetFromOptional<TId>(finalResult, out var finalId))
-        {
-            throw new InvalidOperationException($"Failed to execute insert into {tableName} with statement {insertCommand}.");
-        }
-
-        return finalId!;
     }
 
-    public static TId CreateId<TId>(IDbConnection connection, string tableName, DummyOptions<TId>? dummyOptions = null)
+    private static List<ColumnSchemaEntry> FilterRequiredColumns<TId>(
+        List<ColumnSchemaEntry> columns,
+        DummyOptions<TId> dummyOptions)
     {
-        dummyOptions ??= new DummyOptions<TId>();
-
-        dummyOptions.ForceCreate = true;
-
-        return GetOrCreateId(connection, tableName, dummyOptions);
-    }
-
-    private static List<ColumnSchemaEntry> FilterRequiredColumns<TId>(List<ColumnSchemaEntry> columns, string primaryKeyName, DummyOptions<TId> dummyOptions)
-    {
+        var isComposite = columns.Count(x => x.IsPrimary) > 1;
+        // Check guid is required generated.
         if (dummyOptions.ForcePopulateOptionalColumns)
         {
-            return columns.Where(x => !string.Equals(x.Name, primaryKeyName)).ToList();
+            if (isComposite)
+            {
+                return columns;
+            }
+
+            return columns.Where(x => !x.IsPrimary || (x.IsPrimary && !x.Auto)).ToList();
         }
 
         var result = new List<ColumnSchemaEntry>();
 
         foreach (var column in columns)
         {
-            if (string.Equals(column.Name, primaryKeyName))
+            if (isComposite && column.IsPrimary)
+            {
+                result.Add(column);
+            }
+            else if (column.IsPrimary && !column.Auto)
+            {
+                result.Add(column);
+            }
+
+            if (column.IsPrimary)
             {
                 continue;
             }
@@ -439,7 +422,7 @@ public static class Dummy
         var columnSchema = new List<ColumnSchemaEntry>();
         var foreignKeySchema = new List<ForeignKeySchemaEntry>();
 
-        using var sharedCommand = PrepareCommand(connection, GetColumnSchema, parameters);
+        using var sharedCommand = PrepareCommand(connection, GetColumnSchemaSql, parameters);
         {
             using (var reader = sharedCommand.ExecuteReader())
             {
@@ -450,19 +433,23 @@ public static class Dummy
                     var isNullable = reader.IsDBNull(2) ? null : reader.GetString(2);
                     var dataType = reader.GetString(3);
                     var maxLength = reader.IsDBNull(4) ? default : reader.GetInt32(4);
+                    var isPrimary = reader.GetBoolean(5);
+                    var auto = reader.GetBoolean(6);
 
                     var entry = new ColumnSchemaEntry(colName, dataType)
                     {
                         ColumnDefault = colDefault,
                         IsNullable = isNullable,
-                        MaxLength = maxLength
+                        MaxLength = maxLength,
+                        IsPrimary = isPrimary,
+                        Auto = auto
                     };
 
                     columnSchema.Add(entry);
                 }
             }
 
-            sharedCommand.CommandText = GetForeignKeySchema;
+            sharedCommand.CommandText = GetForeignKeySchemaSql;
             using (var reader = sharedCommand.ExecuteReader())
             {
                 while (reader.Read())
@@ -565,6 +552,14 @@ public static class Dummy
         public string DataType { get; }
 
         public int? MaxLength { get; set; }
+
+        public bool IsPrimary { get; set; }
+
+        public string ParamName => $"@{Name}";
+
+        public string EscapedColumnName => $"`{Name}`";
+
+        public bool Auto { get; set; }
 
         public bool IsActuallyNullable
         {

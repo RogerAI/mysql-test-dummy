@@ -53,6 +53,23 @@ public class DatabaseFixture : IDisposable
                 Country char(2) NOT NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+            CREATE TABLE Categories
+            (
+                Id int(11) NOT NULL PRIMARY KEY AUTO_INCREMENT,
+                Name varchar(300) NOT NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+            CREATE TABLE UserCategories
+            (
+                UserId int(11) NOT NULL,
+                CategoryId int(11) NOT NULL,
+                Created TIMESTAMP NOT NULL,
+                Level int NOT NULL,
+                PRIMARY KEY (`UserId`,`CategoryId`),
+                FOREIGN KEY `FK_UserCategories__UserId` (UserId) REFERENCES Users (Id) ON DELETE NO ACTION ON UPDATE NO ACTION,
+                FOREIGN KEY `FK_UserCategories__CategoryId` (CategoryId) REFERENCES Categories (Id) ON DELETE NO ACTION ON UPDATE NO ACTION
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
             CREATE TABLE Orders
             (
                 Id int(11) NOT NULL PRIMARY KEY AUTO_INCREMENT,
