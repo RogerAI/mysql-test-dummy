@@ -177,34 +177,16 @@ public static class Dummy
                                 break;
                             }
 
-                            // TODO: support non-integer FKs here.
-                            DummyOptions<int> foreignKeyCreateOptions;
-
                             var isSelfReferential = string.Equals(referencedFk.TargetTableName, tableName);
-                            if (isSelfReferential)
+                            var foreignKeyCreateOptions = new DummyOptions<int>
                             {
-                                foreignKeyCreateOptions = new DummyOptions<int>
-                                {
-                                    DatabaseName = dummyOptions.DatabaseName,
-                                    DefaultEmailDomain = dummyOptions.DefaultEmailDomain,
-                                    DefaultUrl = dummyOptions.DefaultUrl,
-                                    ForceCreate = dummyOptions.ForceCreate,
-                                    ForcePopulateOptionalColumns = false,
-                                    RandomSeed = dummyOptions.RandomSeed
-                                };
-                            }
-                            else
-                            {
-                                foreignKeyCreateOptions = new DummyOptions<int>
-                                {
-                                    DatabaseName = dummyOptions.DatabaseName,
-                                    DefaultUrl = dummyOptions.DefaultUrl,
-                                    DefaultEmailDomain = dummyOptions.DefaultEmailDomain,
-                                    ForceCreate = dummyOptions.ForceCreate,
-                                    ForcePopulateOptionalColumns = dummyOptions.ForcePopulateOptionalColumns,
-                                    RandomSeed = dummyOptions.RandomSeed
-                                };
-                            }
+                                DatabaseName = dummyOptions.DatabaseName,
+                                DefaultUrl = dummyOptions.DefaultUrl,
+                                DefaultEmailDomain = dummyOptions.DefaultEmailDomain,
+                                ForceCreate = dummyOptions.ForceCreate,
+                                ForcePopulateOptionalColumns = !isSelfReferential && dummyOptions.ForcePopulateOptionalColumns,
+                                RandomSeed = dummyOptions.RandomSeed
+                            };
 
                             var generated = GetOrCreateId(
                                 connection,
@@ -285,6 +267,48 @@ public static class Dummy
                         value = DateTime.UtcNow.Date;
                         break;
                     case "binary":
+                        if (dummyOptions.ForeignKeys.TryGetValue(column.Name, out matchId))
+                        {
+                            value = matchId;
+                            break;
+                        }
+
+                        referencedFk =
+                            foreignKeySchema.FirstOrDefault(x => string.Equals(x.ColumnName, column.Name));
+
+                        if (referencedFk != null)
+                        {
+                            if (previouslyLocatedFks.TryGetValue(referencedFk.TargetTableName, out var fkId))
+                            {
+                                value = fkId;
+                                break;
+                            }
+
+                            var isSelfReferential = string.Equals(referencedFk.TargetTableName, tableName);
+
+                            var foreignKeyCreateOptions = new DummyOptions(typeof(Guid))
+                            {
+                                DatabaseName = dummyOptions.DatabaseName,
+                                DefaultUrl = dummyOptions.DefaultUrl,
+                                DefaultEmailDomain = dummyOptions.DefaultEmailDomain,
+                                ForceCreate = dummyOptions.ForceCreate,
+                                ForcePopulateOptionalColumns = !isSelfReferential && dummyOptions.ForcePopulateOptionalColumns,
+                                RandomSeed = dummyOptions.RandomSeed
+                            };
+
+                            var generated = GetOrCreateId(
+                                typeof(Guid),
+                                connection,
+                                referencedFk.TargetTableName,
+                                foreignKeyCreateOptions);
+
+                            previouslyLocatedFks[referencedFk.TargetTableName] = generated;
+
+                            value = generated;
+
+                            break;
+                        }
+
                         if (column.MaxLength == 16)
                         {
                             value = Guid.NewGuid().ToByteArray();
