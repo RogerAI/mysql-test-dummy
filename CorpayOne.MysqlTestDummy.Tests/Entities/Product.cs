@@ -32,6 +32,26 @@ namespace CorpayOne.MysqlTestDummy.Tests.Entities
         public string Country { get; set; }
     }
 
+    [Table("Categories")]
+    internal class Category
+    {
+        public int Id { get; set; }
+
+        public string Name { get; set; }
+    }
+
+    [Table("UserCategories")]
+    internal class UserCategory
+    {
+        public int UserId { get; set; }
+
+        public int CategoryId { get; set; }
+
+        public DateTime Created { get; set; }
+
+        public UserCategoryLevel Level { get; set; }
+    }
+
     [Table("Orders")]
     internal class Order
     {
@@ -52,5 +72,13 @@ namespace CorpayOne.MysqlTestDummy.Tests.Entities
         public int? UserId { get; set; }
 
         public string Note { get; set; }
+    }
+
+    internal enum UserCategoryLevel
+    {
+        None = 0,
+        Low = 1,
+        Medium = 2,
+        High = 3
     }
 }

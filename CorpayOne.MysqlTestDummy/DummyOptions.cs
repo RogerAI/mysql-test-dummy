@@ -4,8 +4,68 @@
 /// Options used to generate or retrieve a dummy table value.
 /// </summary>
 /// <typeparam name="TId">The type of the primary key for this table.</typeparam>
-public class DummyOptions<TId>
+public class DummyOptions<TId> : DummyOptions
 {
+    public DummyOptions() : base(typeof(TId))
+    {
+    }
+
+    public DummyOptions<TId> WithForeignKey(string columnName, TId value)
+    {
+        ForeignKeys ??= new Dictionary<string, object>();
+
+        ForeignKeys[columnName] = value!;
+
+        return this;
+    }
+
+    public DummyOptions<TId> WithColumnValue(string columnName, object? value)
+    {
+        ColumnValues ??= new();
+
+        ColumnValues[columnName] = value;
+        return this;
+    }
+
+    public DummyOptions<TId> WithRandomSeed(int seed)
+    {
+        RandomSeed = seed;
+        return this;
+    }
+
+    public DummyOptions<TId> MustForceCreate()
+    {
+        ForceCreate = true;
+        return this;
+    }
+
+    public DummyOptions<TId> MustForcePopulateOptionalColumns()
+    {
+        ForcePopulateOptionalColumns = true;
+        return this;
+    }
+
+    public virtual DummyOptions<TId> Clone() =>
+        new DummyOptions<TId>()
+        {
+            ColumnValues = new Dictionary<string, object?>(ColumnValues ?? new()),
+            DatabaseName = DatabaseName,
+            DefaultEmailDomain = DefaultEmailDomain,
+            DefaultUrl = DefaultUrl,
+            ForceCreate = ForceCreate,
+            ForcePopulateOptionalColumns = ForcePopulateOptionalColumns,
+            ForeignKeys = new Dictionary<string, object>(ForeignKeys ?? new()),
+            RandomSeed = RandomSeed
+        };
+}
+
+public class DummyOptions
+{
+    /// <summary>
+    /// The type of the id for the table.
+    /// </summary>
+    public Type IdType { get; }
+
     /// <summary>
     /// The schema/database name to use, will be automatically detected from the connection if not provided.
     /// </summary>
@@ -14,12 +74,12 @@ public class DummyOptions<TId>
     /// <summary>
     /// Override values for any columns that would otherwise be automatically populated.
     /// </summary>
-    public Dictionary<string, object?> ColumnValues { get; set; } = new ();
+    public Dictionary<string, object?> ColumnValues { get; set; } = new();
 
     /// <summary>
     /// Override any foreign keys that would otherwise be automatically populated.
     /// </summary>
-    public Dictionary<string, TId> ForeignKeys { get; set; } = new ();
+    public Dictionary<string, object> ForeignKeys { get; set; } = new();
 
     /// <summary>
     /// Overrides the seed used for random data generation to populate columns.
@@ -46,52 +106,8 @@ public class DummyOptions<TId>
     /// </summary>
     public bool ForcePopulateOptionalColumns { get; set; }
 
-    public DummyOptions<TId> WithForeignKey(string columnName, TId value)
+    public DummyOptions(Type idType)
     {
-        ForeignKeys ??= new Dictionary<string, TId>();
-
-        ForeignKeys[columnName] = value;
-
-        return this;
+        IdType = idType;
     }
-
-    public DummyOptions<TId> WithColumnValue(string columnName, object? value)
-    {
-        ColumnValues ??= new();
-
-        ColumnValues[columnName] = value;
-
-        return this;
-    }
-
-    public DummyOptions<TId> WithRandomSeed(int seed)
-    {
-        RandomSeed = seed;
-        return this;
-    }
-
-    public DummyOptions<TId> MustForceCreate()
-    {
-        ForceCreate = true;
-        return this;
-    }
-
-    public DummyOptions<TId> MustForcePopulateOptionalColumns()
-    {
-        ForcePopulateOptionalColumns = true;
-        return this;
-    }
-
-    public DummyOptions<TId> Clone() =>
-        new DummyOptions<TId>
-        {
-            ColumnValues = new Dictionary<string, object?>(ColumnValues ?? new()),
-            DatabaseName = DatabaseName,
-            DefaultEmailDomain = DefaultEmailDomain,
-            DefaultUrl = DefaultUrl,
-            ForceCreate = ForceCreate,
-            ForcePopulateOptionalColumns = ForcePopulateOptionalColumns,
-            ForeignKeys = new Dictionary<string, TId>(ForeignKeys ?? new()),
-            RandomSeed = RandomSeed
-        };
 }

@@ -1,5 +1,6 @@
 using System;
 using System.Data;
+using System.Runtime.InteropServices;
 using MySqlConnector;
 
 namespace CorpayOne.MysqlTestDummy.Tests;
@@ -13,7 +14,16 @@ public class DatabaseFixture : IDisposable
 
     public DatabaseFixture()
     {
-        _rootConnection = new MySqlConnection("server=localhost;port=3329;uid=root;pwd=hunter2;database=db");
+        var rootConnectionString = "server=localhost;port=3329;uid=root;pwd=hunter2;database=db;";
+        var testConnectionString = $"server=localhost;port=3329;uid=root;pwd=hunter2;database={DatabaseName};";
+
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        {
+            rootConnectionString += "TlsCipherSuites=TLS_DHE_RSA_WITH_AES_256_GCM_SHA384;";
+            testConnectionString += "TlsCipherSuites=TLS_DHE_RSA_WITH_AES_256_GCM_SHA384;";
+        }
+
+        _rootConnection = new MySqlConnection(rootConnectionString);
 
         try
         {
@@ -53,6 +63,23 @@ public class DatabaseFixture : IDisposable
                 Country char(2) NOT NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+            CREATE TABLE Categories
+            (
+                Id int(11) NOT NULL PRIMARY KEY AUTO_INCREMENT,
+                Name varchar(300) NOT NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+            CREATE TABLE UserCategories
+            (
+                UserId int(11) NOT NULL,
+                CategoryId int(11) NOT NULL,
+                Created TIMESTAMP NOT NULL,
+                Level int NOT NULL,
+                PRIMARY KEY (`UserId`,`CategoryId`),
+                FOREIGN KEY `FK_UserCategories__UserId` (UserId) REFERENCES Users (Id) ON DELETE NO ACTION ON UPDATE NO ACTION,
+                FOREIGN KEY `FK_UserCategories__CategoryId` (CategoryId) REFERENCES Categories (Id) ON DELETE NO ACTION ON UPDATE NO ACTION
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
             CREATE TABLE Orders
             (
                 Id int(11) NOT NULL PRIMARY KEY AUTO_INCREMENT,
@@ -89,7 +116,7 @@ public class DatabaseFixture : IDisposable
 
         command.ExecuteNonQuery();
 
-        _testDatabaseConnection = new MySqlConnection($"server=localhost;port=3329;uid=root;pwd=hunter2;database={DatabaseName}");
+        _testDatabaseConnection = new MySqlConnection(testConnectionString);
 
         _testDatabaseConnection.Open();
     }
