@@ -1,5 +1,6 @@
 using System;
 using System.Data;
+using System.Net;
 using MySqlConnector;
 
 namespace CorpayOne.MysqlTestDummy.Tests;
@@ -13,6 +14,8 @@ public class DatabaseFixture : IDisposable
 
     public DatabaseFixture()
     {
+        ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
+
         _rootConnection = new MySqlConnection("server=localhost;port=3329;uid=root;pwd=hunter2;database=db");
 
         try
