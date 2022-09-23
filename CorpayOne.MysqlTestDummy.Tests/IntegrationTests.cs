@@ -309,5 +309,19 @@ namespace CorpayOne.MysqlTestDummy.Tests
             Assert.NotNull(userCategory1);
             Assert.NotNull(userCategory2);
         }
+
+        [Fact]
+        public async Task IdentityUsers_Insert_Creates()
+        {
+            var conn = _fixture.GetConnection();
+
+            var userId = Dummy.CreateId<Guid>(
+                conn,
+                "IdentityUsers");
+
+            var user = await conn.GetAsync<IdentityUser>(userId);
+
+            Assert.NotNull(user);
+        }
     }
 }

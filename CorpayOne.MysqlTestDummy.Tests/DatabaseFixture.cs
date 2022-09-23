@@ -1,6 +1,7 @@
 using System;
 using System.Data;
 using System.Runtime.InteropServices;
+using Dapper;
 using MySqlConnector;
 
 namespace CorpayOne.MysqlTestDummy.Tests;
@@ -14,6 +15,10 @@ public class DatabaseFixture : IDisposable
 
     public DatabaseFixture()
     {
+        SqlMapper.AddTypeHandler(new GuidStringMapperHandler());
+        SqlMapper.RemoveTypeMap(typeof(Guid));
+        SqlMapper.RemoveTypeMap(typeof(Guid?));
+
         var rootConnectionString = "server=localhost;port=3329;uid=root;pwd=hunter2;database=db;";
         var testConnectionString = $"server=localhost;port=3329;uid=root;pwd=hunter2;database={DatabaseName};";
 
@@ -75,9 +80,9 @@ public class DatabaseFixture : IDisposable
                 CategoryId int(11) NOT NULL,
                 Created TIMESTAMP NOT NULL,
                 Level int NOT NULL,
-                PRIMARY KEY (`UserId`,`CategoryId`),
-                FOREIGN KEY `FK_UserCategories__UserId` (UserId) REFERENCES Users (Id) ON DELETE NO ACTION ON UPDATE NO ACTION,
-                FOREIGN KEY `FK_UserCategories__CategoryId` (CategoryId) REFERENCES Categories (Id) ON DELETE NO ACTION ON UPDATE NO ACTION
+                PRIMARY KEY (UserId,CategoryId),
+                FOREIGN KEY FK_UserCategories__UserId (UserId) REFERENCES Users (Id) ON DELETE NO ACTION ON UPDATE NO ACTION,
+                FOREIGN KEY FK_UserCategories__CategoryId (CategoryId) REFERENCES Categories (Id) ON DELETE NO ACTION ON UPDATE NO ACTION
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
             CREATE TABLE Orders
@@ -85,8 +90,8 @@ public class DatabaseFixture : IDisposable
                 Id int(11) NOT NULL PRIMARY KEY AUTO_INCREMENT,
                 UserId int(11) NOT NULL,
                 ProductId int(11) NOT NULL,
-                FOREIGN KEY `FK_Orders__UserId` (UserId) REFERENCES Users (Id) ON DELETE NO ACTION ON UPDATE NO ACTION,
-                FOREIGN KEY `FK_Orders__ProductId` (ProductId) REFERENCES Products (Id) ON DELETE NO ACTION ON UPDATE NO ACTION
+                FOREIGN KEY FK_Orders__UserId (UserId) REFERENCES Users (Id) ON DELETE NO ACTION ON UPDATE NO ACTION,
+                FOREIGN KEY FK_Orders__ProductId (ProductId) REFERENCES Products (Id) ON DELETE NO ACTION ON UPDATE NO ACTION
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
             CREATE TABLE OrderNotes
@@ -95,8 +100,8 @@ public class DatabaseFixture : IDisposable
                 OrderId int(11) NOT NULL,
                 UserId int(11) NULL,
                 Note text NOT NULL,
-                FOREIGN KEY `FK_OrderNotes__OrderId` (OrderId) REFERENCES Orders (Id) ON DELETE CASCADE ON UPDATE NO ACTION,
-                FOREIGN KEY `FK_OrderNotes__UserId` (UserId) REFERENCES Users (Id) ON DELETE NO ACTION ON UPDATE NO ACTION
+                FOREIGN KEY FK_OrderNotes__OrderId (OrderId) REFERENCES Orders (Id) ON DELETE CASCADE ON UPDATE NO ACTION,
+                FOREIGN KEY FK_OrderNotes__UserId (UserId) REFERENCES Users (Id) ON DELETE NO ACTION ON UPDATE NO ACTION
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
             CREATE TABLE Bids
@@ -111,7 +116,34 @@ public class DatabaseFixture : IDisposable
                 Id bigint(20) NOT NULL PRIMARY KEY AUTO_INCREMENT,
                 Value tinyint NOT NULL,
                 ParentId bigint(20) NULL,
-                FOREIGN KEY `FK_Node__ParentId` (ParentId) REFERENCES Node (Id) ON DELETE CASCADE ON UPDATE NO ACTION
+                FOREIGN KEY FK_Node__ParentId (ParentId) REFERENCES Node (Id) ON DELETE CASCADE ON UPDATE NO ACTION
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+            CREATE TABLE IdentityUsers
+            (
+                UserId varchar(255) NOT NULL,
+                UserName varchar(256) DEFAULT NULL,
+                Email varchar(256) DEFAULT NULL,
+                PRIMARY KEY (UserId),
+                UNIQUE KEY UserNameIndex (UserName)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+            CREATE TABLE IdentityRoles
+            (
+                Id varchar(255) NOT NULL,
+                Name varchar(256) DEFAULT NULL,
+                PRIMARY KEY (Id),
+                UNIQUE KEY Name (Name)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+            CREATE TABLE IdentityUserRoles
+            (
+                UserId varchar(255) NOT NULL,
+                RoleId varchar(255) NOT NULL,
+                PRIMARY KEY (UserId, RoleId),
+                KEY IX_AspNetUserRoles_RoleId (RoleId),
+                CONSTRAINT FK_IdentityUserRoles_RoleId FOREIGN KEY (RoleId) REFERENCES IdentityRoles (Id) ON DELETE CASCADE,
+                CONSTRAINT FK_IdentityUserRoles_UserId FOREIGN KEY (UserId) REFERENCES IdentityUsers (UserId) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
 
         command.ExecuteNonQuery();

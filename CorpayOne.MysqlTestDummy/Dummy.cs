@@ -109,6 +109,12 @@ public static class Dummy
 
         var (columnSchema, foreignKeySchema) = GetTableSchema(connection, parameters);
 
+        if (columnSchema.Count == 0)
+        {
+            throw new InvalidOperationException(
+                $"Could not find columns on table {schemaName}.{tableName}, did you get the table name wrong?");
+        }
+
         var primaryKeyColumns = columnSchema.Where(x => x.IsPrimary).ToList();
 
         if (primaryKeyColumns.Count == 0)
@@ -219,7 +225,11 @@ public static class Dummy
                     case "text":
                     case "longtext":
                     case "char":
-                        if (FactoryIfColumnNamed(column, "Country", "US", ref value))
+                        if (column.IsPrimary && (column.MaxLength >= 32 || !column.MaxLength.HasValue))
+                        {
+                            value = Guid.NewGuid().ToString("D", CultureInfo.InvariantCulture);
+                        }
+                        else if (FactoryIfColumnNamed(column, "Country", "US", ref value))
                         {
                         }
                         else if (FactoryIfColumnNamed(column, "Currency", "USD", ref value))

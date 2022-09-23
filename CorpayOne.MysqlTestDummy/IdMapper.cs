@@ -154,6 +154,12 @@ namespace CorpayOne.MysqlTestDummy
                 return true;
             }
 
+            if (idType == typeof(Guid) && value is string str && Guid.TryParse(str, out var g))
+            {
+                id = g;
+                return true;
+            }
+
             return false;
         }
 
