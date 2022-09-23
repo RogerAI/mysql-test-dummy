@@ -1,6 +1,6 @@
 using System;
 using System.Data;
-using System.Net;
+using System.Runtime.InteropServices;
 using MySqlConnector;
 
 namespace CorpayOne.MysqlTestDummy.Tests;
@@ -14,9 +14,16 @@ public class DatabaseFixture : IDisposable
 
     public DatabaseFixture()
     {
-        ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
+        var rootConnectionString = "server=localhost;port=3329;uid=root;pwd=hunter2;database=db;";
+        var testConnectionString = $"server=localhost;port=3329;uid=root;pwd=hunter2;database={DatabaseName};";
 
-        _rootConnection = new MySqlConnection("server=localhost;port=3329;uid=root;pwd=hunter2;database=db");
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        {
+            rootConnectionString += "TlsCipherSuites=TLS_DHE_RSA_WITH_AES_256_GCM_SHA384;";
+            testConnectionString += "TlsCipherSuites=TLS_DHE_RSA_WITH_AES_256_GCM_SHA384;";
+        }
+
+        _rootConnection = new MySqlConnection(rootConnectionString);
 
         try
         {
@@ -109,7 +116,7 @@ public class DatabaseFixture : IDisposable
 
         command.ExecuteNonQuery();
 
-        _testDatabaseConnection = new MySqlConnection($"server=localhost;port=3329;uid=root;pwd=hunter2;database={DatabaseName}");
+        _testDatabaseConnection = new MySqlConnection(testConnectionString);
 
         _testDatabaseConnection.Open();
     }
