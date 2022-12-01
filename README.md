@@ -17,7 +17,7 @@ Dummy.GetOrCreateId<TId>(IDbConnection connection, string tableName);
 Dummy.CreateId<TId>(IDbConnection connection, string tableName);
 ```
 
-Both these methods take in an open database connection to a MySQL 5 database and the name of a table to target. In addition you define the type of the primary key to be returned, either
+Both these methods take in an open database connection to a MySQL database and the name of a table to target. In addition you define the type of the primary key to be returned, either
 `int` or `Guid`.
 
 MySQL Test Dummy will generate a record in the database (or return the existing one for `GetOrCreateId`) including generating all necessary data required by
