@@ -36,7 +36,8 @@ namespace CorpayOne.MysqlTestDummy.Tests
                 string.IsNullOrWhiteSpace(product.Name),
                 $"Product name should not have been null or whitespace but was: '{product.Name}'");
 
-            Assert.True(product.SKU.Length == 12, $"Expected SKU to be 12 characters but was: '{product.SKU}' ({product.SKU.Length} chars)");
+            Assert.True(product.SKU.Length == 12,
+                $"Expected SKU to be 12 characters but was: '{product.SKU}' ({product.SKU.Length} chars)");
         }
 
         [Fact]
@@ -124,7 +125,8 @@ namespace CorpayOne.MysqlTestDummy.Tests
 
             var conn = _fixture.GetConnection();
 
-            var id = Dummy.CreateId(conn, "Products", new DummyOptions<int>().WithColumnValue(nameof(Product.Subtitle), productSubtitle));
+            var id = Dummy.CreateId(conn, "Products",
+                new DummyOptions<int>().WithColumnValue(nameof(Product.Subtitle), productSubtitle));
 
             var product = await conn.GetAsync<Product>(id);
 
@@ -171,7 +173,8 @@ namespace CorpayOne.MysqlTestDummy.Tests
             // Ignored.
             Dummy.CreateId<int>(conn, "Users");
 
-            var orderNoteId = Dummy.CreateId(conn, "OrderNotes", new DummyOptions<int>().WithForeignKey("UserId", userId));
+            var orderNoteId =
+                Dummy.CreateId(conn, "OrderNotes", new DummyOptions<int>().WithForeignKey("UserId", userId));
 
             var orderNote = await conn.GetAsync<OrderNote>(orderNoteId);
 
@@ -322,6 +325,69 @@ namespace CorpayOne.MysqlTestDummy.Tests
             var user = await conn.GetAsync<IdentityUser>(userId);
 
             Assert.NotNull(user);
+        }
+
+        [Fact]
+        public async Task CircularTableReferences_FooApplicationUsers_Insert_Creates()
+        {
+            var conn = _fixture.GetConnection();
+
+            var userId = Dummy.CreateId(
+                conn,
+                "FooApplicationUsers",
+                new DummyOptions<int>().MustForcePopulateOptionalColumns());
+
+            var (userName, email) = await conn.QuerySingleAsync<(string, string)>(
+                "SELECT Name, Email FROM FooApplicationUsers WHERE Id = @id",
+                new { id = userId });
+
+            Assert.NotNull(userName);
+            Assert.True(email.Contains("@"), "Email should contain an @ symbol");
+
+            var secondUserId = Dummy.CreateId(
+                conn,
+                "FooApplicationUsers",
+                new DummyOptions<int>().MustForcePopulateOptionalColumns());
+
+            var secondUserName = await conn.QuerySingleAsync<string>(
+                "SELECT Name FROM FooApplicationUsers WHERE Id = @id",
+                new { id = secondUserId });
+
+            Assert.NotNull(secondUserName);
+
+            var eventId = Dummy.CreateId(
+                conn,
+                "Events",
+                new DummyOptions<int>().MustForcePopulateOptionalColumns());
+
+            Assert.True(eventId > 0, "Event id should be non-zero");
+
+            var eventId2 = Dummy.CreateId(
+                conn,
+                "Events",
+                new DummyOptions<int>().MustForcePopulateOptionalColumns());
+
+            Assert.True(eventId2 > 0, "Created event id should be non-zero");
+        }
+
+        [Fact]
+        public void UnresolvableCircularReference_Aadvarks_Insert_Fails()
+        {
+            var conn = _fixture.GetConnection();
+
+            try
+            {
+                Dummy.CreateId(
+                    conn,
+                    "Aardvarks",
+                    new DummyOptions<int>().MustForcePopulateOptionalColumns());
+            }
+            catch (InvalidOperationException ex)
+            {
+                Assert.True(ex.Message.Contains("Bears") && ex.Message.Contains("AardvarkId")
+                && ex.Message.Contains("circular reference"),
+                    $"Unexpected exception message: {ex.Message}");
+            }
         }
     }
 }

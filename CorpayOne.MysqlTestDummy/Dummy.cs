@@ -92,8 +92,24 @@ public static class Dummy
         string tableName,
         DummyOptions? dummyOptions = null)
     {
-        dummyOptions ??= new DummyOptions(idType);
+        var visited = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+        return GetOrCreateIdRecursive(
+            idType,
+            connection,
+            tableName,
+            dummyOptions ?? new DummyOptions(idType),
+            visited,
+            new List<string>());
+    }
 
+    private static object GetOrCreateIdRecursive(
+        Type idType,
+        IDbConnection connection,
+        string tableName,
+        DummyOptions dummyOptions,
+        Dictionary<string, object> previouslyVisitedTables,
+        IReadOnlyList<string> referencePath)
+    {
         var schemaName = GetSchemaName(connection, dummyOptions);
 
         if (string.IsNullOrWhiteSpace(dummyOptions.DatabaseName))
@@ -148,9 +164,6 @@ public static class Dummy
 
         var insertPart = $"INSERT INTO `{tableName}` ({colNamePart}) ";
         var valuesPart = $"VALUES ({paramNamePart})";
-
-        var previouslyLocatedFks = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
-
         var dynamicParameters = new Dictionary<string, object?>();
 
         foreach (var column in requiredColumns)
@@ -177,7 +190,7 @@ public static class Dummy
 
                         if (referencedFk != null)
                         {
-                            if (previouslyLocatedFks.TryGetValue(referencedFk.TargetTableName, out var fkId))
+                            if (previouslyVisitedTables.TryGetValue(referencedFk.TargetTableName, out var fkId))
                             {
                                 value = fkId;
                                 break;
@@ -194,12 +207,37 @@ public static class Dummy
                                 RandomSeed = dummyOptions.RandomSeed
                             };
 
-                            var generated = GetOrCreateId(
+                            if (referencePath.Contains(referencedFk.TargetTableName))
+                            {
+                                if (column.IsActuallyNullable)
+                                {
+                                    value = DBNull.Value;
+                                    break;
+                                }
+
+                                if (referencePath.Count(x => x == referencedFk.TargetTableName) > 1)
+                                {
+                                    var tablesList = string.Join(" > ", referencePath);
+
+                                    throw new InvalidOperationException(
+                                        "Schema contains unresolvable circular reference. " +
+                                        $"Column {column.Name} on table {tableName} refers back to a table in the path ({tablesList}) which requires this table to be populated. " +
+                                        "Consider making this key or one of the others nullable.");
+                                }
+                            }
+
+                            var generated = GetOrCreateIdRecursive(
+                                typeof(int),
                                 connection,
                                 referencedFk.TargetTableName,
-                                foreignKeyCreateOptions);
+                                foreignKeyCreateOptions,
+                                previouslyVisitedTables,
+                                new List<string>(referencePath)
+                                {
+                                    tableName
+                                });
 
-                            previouslyLocatedFks[referencedFk.TargetTableName] = generated;
+                            previouslyVisitedTables[referencedFk.TargetTableName] = generated;
 
                             value = generated;
 
@@ -266,6 +304,9 @@ public static class Dummy
                                 : GenerateRandomStringOfLengthOrLower(90, random, true);
                         }
                         break;
+                    case "json":
+                        value = "{ \"id\": 1 }";
+                        break;
                     case "tinyint":
                         value = random.Next(2);
                         break;
@@ -288,7 +329,7 @@ public static class Dummy
 
                         if (referencedFk != null)
                         {
-                            if (previouslyLocatedFks.TryGetValue(referencedFk.TargetTableName, out var fkId))
+                            if (previouslyVisitedTables.TryGetValue(referencedFk.TargetTableName, out var fkId))
                             {
                                 value = fkId;
                                 break;
@@ -312,7 +353,7 @@ public static class Dummy
                                 referencedFk.TargetTableName,
                                 foreignKeyCreateOptions);
 
-                            previouslyLocatedFks[referencedFk.TargetTableName] = generated;
+                            previouslyVisitedTables[referencedFk.TargetTableName] = generated;
 
                             value = generated;
 
@@ -561,7 +602,7 @@ public static class Dummy
 
     private static bool FactoryIfColumnNamed(ColumnSchemaEntry column, string snippet, object newValue, ref object? obj)
     {
-        if (column.MaxLength.HasValue && newValue is string strVal && column.MaxLength.Value > strVal.Length)
+        if (column.MaxLength.HasValue && newValue is string strVal && column.MaxLength.Value < strVal.Length)
         {
             return false;
         }

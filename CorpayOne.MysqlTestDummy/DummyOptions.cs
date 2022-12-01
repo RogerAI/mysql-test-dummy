@@ -1,4 +1,6 @@
-﻿namespace CorpayOne.MysqlTestDummy;
+﻿using System.Diagnostics;
+
+namespace CorpayOne.MysqlTestDummy;
 
 /// <summary>
 /// Options used to generate or retrieve a dummy table value.
@@ -6,10 +8,12 @@
 /// <typeparam name="TId">The type of the primary key for this table.</typeparam>
 public class DummyOptions<TId> : DummyOptions
 {
+    [DebuggerStepThrough]
     public DummyOptions() : base(typeof(TId))
     {
     }
 
+    [DebuggerStepThrough]
     public DummyOptions<TId> WithForeignKey(string columnName, TId value)
     {
         ForeignKeys ??= new Dictionary<string, object>();
@@ -19,6 +23,7 @@ public class DummyOptions<TId> : DummyOptions
         return this;
     }
 
+    [DebuggerStepThrough]
     public DummyOptions<TId> WithColumnValue(string columnName, object? value)
     {
         ColumnValues ??= new();
@@ -27,18 +32,21 @@ public class DummyOptions<TId> : DummyOptions
         return this;
     }
 
+    [DebuggerStepThrough]
     public DummyOptions<TId> WithRandomSeed(int seed)
     {
         RandomSeed = seed;
         return this;
     }
 
+    [DebuggerStepThrough]
     public DummyOptions<TId> MustForceCreate()
     {
         ForceCreate = true;
         return this;
     }
 
+    [DebuggerStepThrough]
     public DummyOptions<TId> MustForcePopulateOptionalColumns()
     {
         ForcePopulateOptionalColumns = true;

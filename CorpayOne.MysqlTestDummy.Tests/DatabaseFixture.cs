@@ -144,7 +144,70 @@ public class DatabaseFixture : IDisposable
                 KEY IX_AspNetUserRoles_RoleId (RoleId),
                 CONSTRAINT FK_IdentityUserRoles_RoleId FOREIGN KEY (RoleId) REFERENCES IdentityRoles (Id) ON DELETE CASCADE,
                 CONSTRAINT FK_IdentityUserRoles_UserId FOREIGN KEY (UserId) REFERENCES IdentityUsers (UserId) ON DELETE CASCADE
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+            -- Define a resolvable circular reference.
+
+            CREATE TABLE EventActors
+            (
+                `Id` int NOT NULL AUTO_INCREMENT,
+                `RefType` int NOT NULL,
+                `RefId` int NOT NULL,
+                PRIMARY KEY (`Id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+            CREATE TABLE FooApplicationUsers
+            (
+                Id int NOT NULL PRIMARY KEY AUTO_INCREMENT,
+                Name varchar(300) NOT NULL,
+                Email varchar(256) NOT NULL,
+                EventActorId int NOT NULL,
+                FOREIGN KEY FK_FooApplicationUsers__EventActors (EventActorId) REFERENCES EventActors (Id) ON DELETE CASCADE ON UPDATE NO ACTION
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+            CREATE TABLE Events
+            (
+                `Id` int NOT NULL AUTO_INCREMENT,
+                `EventActorId` int NOT NULL,
+                `EventJson` json NOT NULL,
+                `PerformedById` int DEFAULT NULL,
+                PRIMARY KEY (`Id`),
+                KEY `FK_Events_EventActors` (`EventActorId`),
+                KEY `FK_Events_FooApplicationUsers` (`PerformedById`),
+                CONSTRAINT `FK_Events_EventActors` FOREIGN KEY (`EventActorId`) REFERENCES `EventActors` (`Id`) ON DELETE CASCADE ON UPDATE CASCADE,
+                CONSTRAINT `FK_Events_FooApplicationUsers` FOREIGN KEY (`PerformedById`) REFERENCES `FooApplicationUsers` (`Id`) ON DELETE CASCADE ON UPDATE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+            ALTER TABLE EventActors
+            ADD COLUMN CreatedById int NULL,
+            ADD FOREIGN KEY `FK_EventActors__FooApplicationUsers` (CreatedById) REFERENCES FooApplicationUsers (Id)
+                ON DELETE NO ACTION ON UPDATE NO ACTION;
+
+            -- End resolvable circular reference tables
+
+            -- Define an unresolvable circular reference
+
+            CREATE TABLE Aardvarks
+            (
+                Id int NOT NULL PRIMARY KEY AUTO_INCREMENT,
+                Name varchar(300) NOT NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+            CREATE TABLE Bears
+            (
+                Id int NOT NULL PRIMARY KEY AUTO_INCREMENT,
+                Email varchar(300) NOT NULL COMMENT 'Bears are online',
+                AardvarkId int NOT NULL,
+                CONSTRAINT `FK_Bears__Aardvarks` FOREIGN KEY (`AardvarkId`) REFERENCES `Aardvarks` (`Id`) ON DELETE CASCADE ON UPDATE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+            ALTER TABLE Aardvarks
+            ADD COLUMN BearId int NOT NULL,
+            ADD FOREIGN KEY `FK_Aardvarks__Bears` (BearId) REFERENCES Bears (Id)
+                ON DELETE NO ACTION ON UPDATE NO ACTION;
+
+            -- End unresolvable circular reference tables";
+
 
         command.ExecuteNonQuery();
 
@@ -153,10 +216,7 @@ public class DatabaseFixture : IDisposable
         _testDatabaseConnection.Open();
     }
 
-    public IDbConnection GetConnection()
-    {
-        return _testDatabaseConnection;
-    }
+    public IDbConnection GetConnection() => _testDatabaseConnection;
 
     public void Dispose()
     {
