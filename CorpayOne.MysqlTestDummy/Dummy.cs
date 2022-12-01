@@ -4,7 +4,7 @@ using System.Globalization;
 
 namespace CorpayOne.MysqlTestDummy;
 
-public static partial class Dummy
+public static class Dummy
 {
     private const string GetColumnSchemaSql =
         @"      SELECT  COLUMN_NAME as Name,
@@ -140,10 +140,10 @@ public static partial class Dummy
             }
 
             var parameters = new Dictionary<string, object?>
-        {
-            { "schema", schemaName },
-            { "table", tableName }
-        };
+            {
+                { "schema", schemaName },
+                { "table", tableName }
+            };
 
             var (columnSchema, foreignKeySchema) = GetTableSchema(connection, parameters);
 
