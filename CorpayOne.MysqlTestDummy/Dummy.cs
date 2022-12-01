@@ -4,7 +4,7 @@ using System.Globalization;
 
 namespace CorpayOne.MysqlTestDummy;
 
-public static class Dummy
+public static partial class Dummy
 {
     private const string GetColumnSchemaSql =
         @"      SELECT  COLUMN_NAME as Name,
@@ -83,7 +83,13 @@ public static class Dummy
         string tableName,
         DummyOptions<TId>? dummyOptions = null)
     {
-        return (TId)GetOrCreateId(typeof(TId), connection, tableName, dummyOptions);
+        var result = GetOrCreateIdImplementation<TId>(connection, tableName, dummyOptions);
+        if (!string.IsNullOrEmpty(result.Error))
+        {
+            throw new Exception(result.Error);
+        }
+
+        return result.Id;
     }
 
     public static object GetOrCreateId(
@@ -92,256 +98,305 @@ public static class Dummy
         string tableName,
         DummyOptions? dummyOptions = null)
     {
-        dummyOptions ??= new DummyOptions(idType);
+        var result = GetOrCreateIdImplementation(
+            idType,
+            connection,
+            tableName,
+            dummyOptions);
 
-        var schemaName = GetSchemaName(connection, dummyOptions);
-
-        if (string.IsNullOrWhiteSpace(dummyOptions.DatabaseName))
+        if (!string.IsNullOrEmpty(result.Error))
         {
-            dummyOptions.DatabaseName = schemaName;
+            throw new DummyException(result.Error);
         }
 
-        var parameters = new Dictionary<string, object?>
+        return result.Id;
+    }
+
+    private static (TId Id, string Error) GetOrCreateIdImplementation<TId>(
+        IDbConnection connection,
+        string tableName,
+        DummyOptions<TId>? dummyOptions = null)
+    {
+        var result = GetOrCreateIdImplementation(typeof(TId), connection, tableName, dummyOptions);
+
+        return ((TId)result.Id, result.Error);
+    }
+
+    private static (object Id, string Error) GetOrCreateIdImplementation(
+        Type idType,
+        IDbConnection connection,
+        string tableName,
+        DummyOptions? dummyOptions = null)
+    {
+        try
+        {
+            dummyOptions ??= new DummyOptions(idType);
+
+            var schemaName = GetSchemaName(connection, dummyOptions);
+
+            if (string.IsNullOrWhiteSpace(dummyOptions.DatabaseName))
+            {
+                dummyOptions.DatabaseName = schemaName;
+            }
+
+            var parameters = new Dictionary<string, object?>
         {
             { "schema", schemaName },
             { "table", tableName }
         };
 
-        var (columnSchema, foreignKeySchema) = GetTableSchema(connection, parameters);
+            var (columnSchema, foreignKeySchema) = GetTableSchema(connection, parameters);
 
-        if (columnSchema.Count == 0)
-        {
-            throw new InvalidOperationException(
-                $"Could not find columns on table {schemaName}.{tableName}, did you get the table name wrong?");
-        }
-
-        var primaryKeyColumns = columnSchema.Where(x => x.IsPrimary).ToList();
-
-        if (primaryKeyColumns.Count == 0)
-        {
-            throw new InvalidOperationException($"Could not find primary key column name(s) on {schemaName}.{tableName}");
-        }
-
-        if (!dummyOptions.ForceCreate)
-        {
-            var colsSelect = string.Join(", ", primaryKeyColumns.Select(x => x.EscapedColumnName));
-            if (TryReadExistingRecord(
-                    idType,
-                    connection,
-                    $"SELECT {colsSelect} FROM `{tableName}` LIMIT 1;",
-                    null, out var existingResult))
+            if (columnSchema.Count == 0)
             {
-                return existingResult!;
+                throw new InvalidOperationException(
+                    $"Could not find columns on table {schemaName}.{tableName}, did you get the table name wrong?");
             }
-        }
 
-        var random = dummyOptions.RandomSeed.HasValue ? new Random(dummyOptions.RandomSeed.Value) : new Random();
+            var primaryKeyColumns = columnSchema.Where(x => x.IsPrimary).ToList();
 
-        var requiredColumns = FilterRequiredColumns(columnSchema, dummyOptions);
-
-        var colNameList = requiredColumns.Select(x => x.EscapedColumnName);
-
-        var paramNameList = requiredColumns.Select(x => x.ParamName);
-
-        var colNamePart = string.Join(", ", colNameList);
-        var paramNamePart = string.Join(", ", paramNameList);
-
-        var insertPart = $"INSERT INTO `{tableName}` ({colNamePart}) ";
-        var valuesPart = $"VALUES ({paramNamePart})";
-
-        var previouslyLocatedFks = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
-
-        var dynamicParameters = new Dictionary<string, object?>();
-
-        foreach (var column in requiredColumns)
-        {
-            var hasOverride = dummyOptions.ColumnValues.TryGetValue(column.Name, out var overrideValue);
-
-            object? value = overrideValue;
-
-            if (!hasOverride)
+            if (primaryKeyColumns.Count == 0)
             {
-                switch (column.DataType.ToLowerInvariant())
+                throw new InvalidOperationException($"Could not find primary key column name(s) on {schemaName}.{tableName}");
+            }
+
+            if (!dummyOptions.ForceCreate)
+            {
+                var colsSelect = string.Join(", ", primaryKeyColumns.Select(x => x.EscapedColumnName));
+                if (TryReadExistingRecord(
+                        idType,
+                        connection,
+                        $"SELECT {colsSelect} FROM `{tableName}` LIMIT 1;",
+                        null, out var existingResult))
                 {
-                    case "int":
-                    case "double":
-                    case "bigint":
-                        if (dummyOptions.ForeignKeys.TryGetValue(column.Name, out var matchId))
-                        {
-                            value = matchId;
-                            break;
-                        }
-
-                        var referencedFk =
-                            foreignKeySchema.FirstOrDefault(x => string.Equals(x.ColumnName, column.Name));
-
-                        if (referencedFk != null)
-                        {
-                            if (previouslyLocatedFks.TryGetValue(referencedFk.TargetTableName, out var fkId))
-                            {
-                                value = fkId;
-                                break;
-                            }
-
-                            var isSelfReferential = string.Equals(referencedFk.TargetTableName, tableName);
-                            var foreignKeyCreateOptions = new DummyOptions<int>
-                            {
-                                DatabaseName = dummyOptions.DatabaseName,
-                                DefaultUrl = dummyOptions.DefaultUrl,
-                                DefaultEmailDomain = dummyOptions.DefaultEmailDomain,
-                                ForceCreate = dummyOptions.ForceCreate,
-                                ForcePopulateOptionalColumns = !isSelfReferential && dummyOptions.ForcePopulateOptionalColumns,
-                                RandomSeed = dummyOptions.RandomSeed
-                            };
-
-                            var generated = GetOrCreateId(
-                                connection,
-                                referencedFk.TargetTableName,
-                                foreignKeyCreateOptions);
-
-                            previouslyLocatedFks[referencedFk.TargetTableName] = generated;
-
-                            value = generated;
-
-                            break;
-                        }
-
-                        if (FactoryIfColumnNamed(column, "Amount", random.Next(500, 10000), ref value))
-                        {
-                        }
-                        else if (FactoryIfColumnNamed(column, "Month", random.Next(1, 13), ref value))
-                        {
-                        }
-                        else if (FactoryIfColumnNamed(column, "Year", random.Next(2017, 2038), ref value))
-                        {
-                        }
-                        else
-                        {
-                            value = random.Next(0, 100);
-                        }
-
-                        break;
-                    case "varchar":
-                    case "text":
-                    case "longtext":
-                    case "char":
-                        if (column.IsPrimary && (column.MaxLength >= 32 || !column.MaxLength.HasValue))
-                        {
-                            value = Guid.NewGuid().ToString("D", CultureInfo.InvariantCulture);
-                        }
-                        else if (FactoryIfColumnNamed(column, "Country", "US", ref value))
-                        {
-                        }
-                        else if (FactoryIfColumnNamed(column, "Currency", "USD", ref value))
-                        {
-                        }
-                        else if (FactoryIfColumnNamed(column, "Culture", "en-US", ref value))
-                        {
-                        }
-                        else if (FactoryIfColumnNamed(
-                                     column,
-                                     "Email",
-                                     GenerateRandomStringOfLengthOrLower(20, random, false) + dummyOptions.DefaultEmailDomain,
-                                     ref value))
-                        {
-                        }
-                        else if (FactoryIfColumnNamed(column, "Guid", Guid.NewGuid().ToString("D", CultureInfo.InvariantCulture), ref value))
-                        {
-                        }
-                        else if (FactoryIfColumnNamed(column, "Url", dummyOptions.DefaultUrl, ref value)
-                                 || FactoryIfColumnNamed(column, "Link", dummyOptions.DefaultUrl, ref value))
-                        {
-                        }
-                        else if (FactoryIfColumnNamed(column, "Iban", "DK5000400440116243", ref value))
-                        {
-                        }
-                        else if (string.Equals(column.DataType, "char", StringComparison.OrdinalIgnoreCase))
-                        {
-                            value = GenerateRandomStringOfLength(column.MaxLength.GetValueOrDefault(), random, false);
-                        }
-                        else
-                        {
-                            value = (column.MaxLength.HasValue && column.MaxLength < 200)
-                                ? GenerateRandomStringOfLengthOrLower(column.MaxLength.Value, random, true)
-                                : GenerateRandomStringOfLengthOrLower(90, random, true);
-                        }
-                        break;
-                    case "tinyint":
-                        value = random.Next(2);
-                        break;
-                    case "timestamp":
-                    case "datetime":
-                        value = DateTime.UtcNow;
-                        break;
-                    case "date":
-                        value = DateTime.UtcNow.Date;
-                        break;
-                    case "binary":
-                        if (dummyOptions.ForeignKeys.TryGetValue(column.Name, out matchId))
-                        {
-                            value = matchId;
-                            break;
-                        }
-
-                        referencedFk =
-                            foreignKeySchema.FirstOrDefault(x => string.Equals(x.ColumnName, column.Name));
-
-                        if (referencedFk != null)
-                        {
-                            if (previouslyLocatedFks.TryGetValue(referencedFk.TargetTableName, out var fkId))
-                            {
-                                value = fkId;
-                                break;
-                            }
-
-                            var isSelfReferential = string.Equals(referencedFk.TargetTableName, tableName);
-
-                            var foreignKeyCreateOptions = new DummyOptions(typeof(Guid))
-                            {
-                                DatabaseName = dummyOptions.DatabaseName,
-                                DefaultUrl = dummyOptions.DefaultUrl,
-                                DefaultEmailDomain = dummyOptions.DefaultEmailDomain,
-                                ForceCreate = dummyOptions.ForceCreate,
-                                ForcePopulateOptionalColumns = !isSelfReferential && dummyOptions.ForcePopulateOptionalColumns,
-                                RandomSeed = dummyOptions.RandomSeed
-                            };
-
-                            var generated = GetOrCreateId(
-                                typeof(Guid),
-                                connection,
-                                referencedFk.TargetTableName,
-                                foreignKeyCreateOptions);
-
-                            previouslyLocatedFks[referencedFk.TargetTableName] = generated;
-
-                            value = generated;
-
-                            break;
-                        }
-
-                        if (column.MaxLength == 16)
-                        {
-                            value = Guid.NewGuid().ToByteArray();
-                        }
-                        else if (column.MaxLength.HasValue)
-                        {
-                            value = new byte[column.MaxLength.Value];
-                        }
-                        break;
+                    return (existingResult!, string.Empty);
                 }
             }
 
-            dynamicParameters.Add(column.Name, value);
-        }
+            var random = dummyOptions.RandomSeed.HasValue ? new Random(dummyOptions.RandomSeed.Value) : new Random();
 
-        return CreateFinal(
-            idType,
-            connection,
-            primaryKeyColumns,
-            insertPart,
-            valuesPart,
-            dynamicParameters,
-            tableName);
+            var requiredColumns = FilterRequiredColumns(columnSchema, dummyOptions);
+
+            var colNameList = requiredColumns.Select(x => x.EscapedColumnName);
+
+            var paramNameList = requiredColumns.Select(x => x.ParamName);
+
+            var colNamePart = string.Join(", ", colNameList);
+            var paramNamePart = string.Join(", ", paramNameList);
+
+            var insertPart = $"INSERT INTO `{tableName}` ({colNamePart}) ";
+            var valuesPart = $"VALUES ({paramNamePart})";
+
+            var previouslyLocatedFks = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+
+            var dynamicParameters = new Dictionary<string, object?>();
+
+            foreach (var column in requiredColumns)
+            {
+                var hasOverride = dummyOptions.ColumnValues.TryGetValue(column.Name, out var overrideValue);
+
+                object? value = overrideValue;
+
+                if (!hasOverride)
+                {
+                    switch (column.DataType.ToLowerInvariant())
+                    {
+                        case "int":
+                        case "double":
+                        case "bigint":
+                            if (dummyOptions.ForeignKeys.TryGetValue(column.Name, out var matchId))
+                            {
+                                value = matchId;
+                                break;
+                            }
+
+                            var referencedFk =
+                                foreignKeySchema.FirstOrDefault(x => string.Equals(x.ColumnName, column.Name));
+
+                            if (referencedFk != null)
+                            {
+                                if (previouslyLocatedFks.TryGetValue(referencedFk.TargetTableName, out var fkId))
+                                {
+                                    value = fkId;
+                                    break;
+                                }
+
+                                var isSelfReferential = string.Equals(referencedFk.TargetTableName, tableName);
+                                var foreignKeyCreateOptions = new DummyOptions<int>
+                                {
+                                    DatabaseName = dummyOptions.DatabaseName,
+                                    DefaultUrl = dummyOptions.DefaultUrl,
+                                    DefaultEmailDomain = dummyOptions.DefaultEmailDomain,
+                                    ForceCreate = dummyOptions.ForceCreate,
+                                    ForcePopulateOptionalColumns = !isSelfReferential && dummyOptions.ForcePopulateOptionalColumns,
+                                    RandomSeed = dummyOptions.RandomSeed
+                                };
+
+                                var result = GetOrCreateIdImplementation(
+                                    connection,
+                                    referencedFk.TargetTableName,
+                                    foreignKeyCreateOptions);
+
+                                if (!string.IsNullOrEmpty(result.Error))
+                                {
+                                    return (new(), result.Error);
+                                }
+
+                                previouslyLocatedFks[referencedFk.TargetTableName] = result.Id;
+
+                                value = result.Id;
+
+                                break;
+                            }
+
+                            if (FactoryIfColumnNamed(column, "Amount", random.Next(500, 10000), ref value))
+                            {
+                            }
+                            else if (FactoryIfColumnNamed(column, "Month", random.Next(1, 13), ref value))
+                            {
+                            }
+                            else if (FactoryIfColumnNamed(column, "Year", random.Next(2017, 2038), ref value))
+                            {
+                            }
+                            else
+                            {
+                                value = random.Next(0, 100);
+                            }
+
+                            break;
+                        case "varchar":
+                        case "text":
+                        case "longtext":
+                        case "char":
+                            if (column.IsPrimary && (column.MaxLength >= 32 || !column.MaxLength.HasValue))
+                            {
+                                value = Guid.NewGuid().ToString("D", CultureInfo.InvariantCulture);
+                            }
+                            else if (FactoryIfColumnNamed(column, "Country", "US", ref value))
+                            {
+                            }
+                            else if (FactoryIfColumnNamed(column, "Currency", "USD", ref value))
+                            {
+                            }
+                            else if (FactoryIfColumnNamed(column, "Culture", "en-US", ref value))
+                            {
+                            }
+                            else if (FactoryIfColumnNamed(
+                                         column,
+                                         "Email",
+                                         GenerateRandomStringOfLengthOrLower(20, random, false) + dummyOptions.DefaultEmailDomain,
+                                         ref value))
+                            {
+                            }
+                            else if (FactoryIfColumnNamed(column, "Guid", Guid.NewGuid().ToString("D", CultureInfo.InvariantCulture), ref value))
+                            {
+                            }
+                            else if (FactoryIfColumnNamed(column, "Url", dummyOptions.DefaultUrl, ref value)
+                                     || FactoryIfColumnNamed(column, "Link", dummyOptions.DefaultUrl, ref value))
+                            {
+                            }
+                            else if (FactoryIfColumnNamed(column, "Iban", "DK5000400440116243", ref value))
+                            {
+                            }
+                            else if (string.Equals(column.DataType, "char", StringComparison.OrdinalIgnoreCase))
+                            {
+                                value = GenerateRandomStringOfLength(column.MaxLength.GetValueOrDefault(), random, false);
+                            }
+                            else
+                            {
+                                value = (column.MaxLength.HasValue && column.MaxLength < 200)
+                                    ? GenerateRandomStringOfLengthOrLower(column.MaxLength.Value, random, true)
+                                    : GenerateRandomStringOfLengthOrLower(90, random, true);
+                            }
+                            break;
+                        case "tinyint":
+                            value = random.Next(2);
+                            break;
+                        case "timestamp":
+                        case "datetime":
+                            value = DateTime.UtcNow;
+                            break;
+                        case "date":
+                            value = DateTime.UtcNow.Date;
+                            break;
+                        case "binary":
+                            if (dummyOptions.ForeignKeys.TryGetValue(column.Name, out matchId))
+                            {
+                                value = matchId;
+                                break;
+                            }
+
+                            referencedFk =
+                                foreignKeySchema.FirstOrDefault(x => string.Equals(x.ColumnName, column.Name));
+
+                            if (referencedFk != null)
+                            {
+                                if (previouslyLocatedFks.TryGetValue(referencedFk.TargetTableName, out var fkId))
+                                {
+                                    value = fkId;
+                                    break;
+                                }
+
+                                var isSelfReferential = string.Equals(referencedFk.TargetTableName, tableName);
+
+                                var foreignKeyCreateOptions = new DummyOptions(typeof(Guid))
+                                {
+                                    DatabaseName = dummyOptions.DatabaseName,
+                                    DefaultUrl = dummyOptions.DefaultUrl,
+                                    DefaultEmailDomain = dummyOptions.DefaultEmailDomain,
+                                    ForceCreate = dummyOptions.ForceCreate,
+                                    ForcePopulateOptionalColumns = !isSelfReferential && dummyOptions.ForcePopulateOptionalColumns,
+                                    RandomSeed = dummyOptions.RandomSeed
+                                };
+
+                                var result = GetOrCreateIdImplementation(
+                                    typeof(Guid),
+                                    connection,
+                                    referencedFk.TargetTableName,
+                                    foreignKeyCreateOptions);
+
+                                if (!string.IsNullOrEmpty(result.Error))
+                                {
+                                    return (new(), result.Error);
+                                }
+
+                                previouslyLocatedFks[referencedFk.TargetTableName] = result.Id;
+
+                                value = result.Id;
+
+                                break;
+                            }
+
+                            if (column.MaxLength == 16)
+                            {
+                                value = Guid.NewGuid().ToByteArray();
+                            }
+                            else if (column.MaxLength.HasValue)
+                            {
+                                value = new byte[column.MaxLength.Value];
+                            }
+                            break;
+                    }
+                }
+
+                dynamicParameters.Add(column.Name, value);
+            }
+
+            return (CreateFinal(
+                idType,
+                connection,
+                primaryKeyColumns,
+                insertPart,
+                valuesPart,
+                dynamicParameters,
+                tableName), string.Empty);
+        }
+        catch (Exception ex)
+        {
+            return (
+                new(),
+                $"When getting idType '{idType.Name}' from table '{tableName}', following error occured: '{ex.Message}' at {ex.StackTrace}");
+        }
     }
 
     private static bool TryReadExistingRecord(
