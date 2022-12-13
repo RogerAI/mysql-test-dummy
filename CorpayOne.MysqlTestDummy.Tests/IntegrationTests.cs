@@ -41,6 +41,41 @@ namespace CorpayOne.MysqlTestDummy.Tests
         }
 
         [Fact]
+        public async Task SimpleIntId_ProductTableCaseInsensitive_Creates()
+        {
+            var conn = _fixture.GetConnection();
+
+            var id = Dummy.CreateId<int>(conn, "Products", new DummyOptions<int>()
+                .WithColumnValue("naME", "Brussel Sprouts"));
+
+            Assert.True(id > 0, $"Expected id to be greater than zero but was {id}.");
+
+            var product = await conn.GetAsync<Product>(id);
+
+            Assert.NotNull(product);
+            Assert.Equal("Brussel Sprouts", product.Name);
+        }
+
+        [Fact]
+        public async Task SimpleIntId_ProductTableCaseSensitive_Creates()
+        {
+            var conn = _fixture.GetConnection();
+
+            var id = Dummy.CreateId(conn, "Products", new DummyOptions<int>
+                {
+                    ColumnsCaseSensitive = true
+                }
+                .WithColumnValue("naME", "Brussel Sprouts"));
+
+            Assert.True(id > 0, $"Expected id to be greater than zero but was {id}.");
+
+            var product = await conn.GetAsync<Product>(id);
+
+            Assert.NotNull(product);
+            Assert.NotEqual("Brussel Sprouts", product.Name);
+        }
+
+        [Fact]
         public async Task SimpleIntId_UserTable_Creates()
         {
             var conn = _fixture.GetConnection();

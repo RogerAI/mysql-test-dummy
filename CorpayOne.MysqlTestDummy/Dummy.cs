@@ -151,6 +151,12 @@ public static class Dummy
             }
         }
 
+        var stringComparer = dummyOptions.ColumnsCaseSensitive
+            ? StringComparer.Ordinal
+            : StringComparer.OrdinalIgnoreCase;
+        var columnValueLookup = new Dictionary<string, object?>(dummyOptions.ColumnValues, stringComparer);
+        var foreignKeyLookup = new Dictionary<string, object>(dummyOptions.ForeignKeys, stringComparer);
+
         var random = dummyOptions.RandomSeed.HasValue ? new Random(dummyOptions.RandomSeed.Value) : new Random();
 
         var requiredColumns = FilterRequiredColumns(columnSchema, dummyOptions);
@@ -166,9 +172,10 @@ public static class Dummy
         var valuesPart = $"VALUES ({paramNamePart})";
         var dynamicParameters = new Dictionary<string, object?>();
 
+
         foreach (var column in requiredColumns)
         {
-            var hasOverride = dummyOptions.ColumnValues.TryGetValue(column.Name, out var overrideValue);
+            var hasOverride = columnValueLookup.TryGetValue(column.Name, out var overrideValue);
 
             object? value = overrideValue;
 
@@ -179,7 +186,7 @@ public static class Dummy
                     case "int":
                     case "double":
                     case "bigint":
-                        if (dummyOptions.ForeignKeys.TryGetValue(column.Name, out var matchId))
+                        if (foreignKeyLookup.TryGetValue(column.Name, out var matchId))
                         {
                             value = matchId;
                             break;
@@ -318,7 +325,7 @@ public static class Dummy
                         value = DateTime.UtcNow.Date;
                         break;
                     case "binary":
-                        if (dummyOptions.ForeignKeys.TryGetValue(column.Name, out matchId))
+                        if (foreignKeyLookup.TryGetValue(column.Name, out matchId))
                         {
                             value = matchId;
                             break;
@@ -465,6 +472,10 @@ public static class Dummy
 
         var result = new List<ColumnSchemaEntry>();
 
+        var stringComparer = dummyOptions.ColumnsCaseSensitive
+            ? StringComparison.Ordinal
+            : StringComparison.OrdinalIgnoreCase;
+
         foreach (var column in columns)
         {
             if (isComposite && column.IsPrimary)
@@ -489,11 +500,12 @@ public static class Dummy
             {
                 result.Add(column);
             }
-            else if (dummyOptions.ColumnValues.Any(x => string.Equals(x.Key, column.Name)))
+            else if (dummyOptions.ColumnValues.Any(x =>
+                         string.Equals(x.Key, column.Name, stringComparer)))
             {
                 result.Add(column);
             }
-            else if (dummyOptions.ForeignKeys.Any(x => string.Equals(x.Key, column.Name)))
+            else if (dummyOptions.ForeignKeys.Any(x => string.Equals(x.Key, column.Name, stringComparer)))
             {
                 result.Add(column);
             }

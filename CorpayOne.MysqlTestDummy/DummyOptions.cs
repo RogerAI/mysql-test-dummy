@@ -114,6 +114,11 @@ public class DummyOptions
     /// </summary>
     public bool ForcePopulateOptionalColumns { get; set; }
 
+    /// <summary>
+    /// Whether the column names provided in <see cref="ColumnValues"/> should be treated as case sensitive.
+    /// </summary>
+    public bool ColumnsCaseSensitive { get; set; }
+
     public DummyOptions(Type idType)
     {
         IdType = idType;
