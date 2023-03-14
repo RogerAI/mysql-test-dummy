@@ -302,7 +302,7 @@ public static class Dummy
                         }
                         else if (string.Equals(column.DataType, "char", StringComparison.OrdinalIgnoreCase))
                         {
-                            value = GenerateRandomStringOfLength(column.MaxLength.GetValueOrDefault(), random, false);
+                            value = GenerateRandomStringOfLength((int)column.MaxLength.GetValueOrDefault(), random, false);
                         }
                         else
                         {
@@ -529,7 +529,7 @@ public static class Dummy
                     var colDefault = reader.IsDBNull(1) ? null : reader.GetString(1);
                     var isNullable = reader.IsDBNull(2) ? null : reader.GetString(2);
                     var dataType = reader.GetString(3);
-                    var maxLength = reader.IsDBNull(4) ? default : reader.GetInt32(4);
+                    var maxLength = reader.IsDBNull(4) ? default : reader.GetInt64(4);
                     var isPrimary = reader.GetBoolean(5);
                     var auto = reader.GetBoolean(6);
 
@@ -564,9 +564,19 @@ public static class Dummy
         return (columnSchema, foreignKeySchema);
     }
 
-    private static string GenerateRandomStringOfLengthOrLower(int length, Random random, bool allowWhitespace)
+    private static string GenerateRandomStringOfLengthOrLower(long length, Random random, bool allowWhitespace)
     {
-        var lengthToFill = random.Next(length / 2, length);
+        int len;
+        if (length > int.MaxValue)
+        {
+            len = 10000;
+        }
+        else
+        {
+            len = (int)length;
+        }
+
+        var lengthToFill = random.Next(len / 2, len);
 
         return GenerateRandomStringOfLength(lengthToFill, random, allowWhitespace);
     }
@@ -648,7 +658,7 @@ public static class Dummy
 
         public string DataType { get; }
 
-        public int? MaxLength { get; set; }
+        public long? MaxLength { get; set; }
 
         public bool IsPrimary { get; set; }
 
