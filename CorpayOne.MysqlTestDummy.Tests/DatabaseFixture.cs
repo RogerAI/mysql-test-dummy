@@ -206,8 +206,23 @@ public class DatabaseFixture : IDisposable
             ADD FOREIGN KEY `FK_Aardvarks__Bears` (BearId) REFERENCES Bears (Id)
                 ON DELETE NO ACTION ON UPDATE NO ACTION;
 
-            -- End unresolvable circular reference tables";
+            -- End unresolvable circular reference tables
 
+            CREATE TABLE `SystemEntries` (
+                Id int NOT NULL PRIMARY KEY AUTO_INCREMENT,
+                `RefType` int NOT NULL,
+                `RefId` int NOT NULL,
+                UNIQUE KEY `UQ_SystemEntries__RefId_RefType` (`RefId`,`RefType`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+            CREATE TABLE `HashedLookups` (
+                Id int NOT NULL PRIMARY KEY AUTO_INCREMENT,
+                `Name` varchar(128) NOT NULL,
+                `Path` varchar(1024) NOT NULL,
+                `SystemEntryId` INT NULL,
+                CONSTRAINT `FK_HashedLookups__SystemEntries`
+                    FOREIGN KEY (`SystemEntryId`) REFERENCES `SystemEntries` (`Id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
 
         command.ExecuteNonQuery();
 

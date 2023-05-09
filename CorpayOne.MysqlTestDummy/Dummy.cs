@@ -7,7 +7,7 @@ namespace CorpayOne.MysqlTestDummy;
 public static class Dummy
 {
     private const string GetColumnSchemaSql =
-        @"      SELECT  COLUMN_NAME as Name,
+        @"      SELECT      COLUMN_NAME as Name,
                             COLUMN_DEFAULT as ColumnDefault,
                             IS_NULLABLE as IsNullable,
                             DATA_TYPE as DataType,
@@ -16,15 +16,27 @@ public static class Dummy
                             (EXTRA = 'auto_increment') as Auto
                     FROM    INFORMATION_SCHEMA.COLUMNS
                     WHERE   TABLE_NAME = @table
-                    AND     TABLE_SCHEMA = @schema;";
+                        AND TABLE_SCHEMA = @schema;";
 
     private const string GetForeignKeySchemaSql =
-        @"      SELECT  COLUMN_NAME as ColumnName,
+        @"      SELECT      COLUMN_NAME as ColumnName,
                             REFERENCED_TABLE_NAME as TargetTableName
                     FROM    INFORMATION_SCHEMA.KEY_COLUMN_USAGE
                     WHERE   TABLE_NAME = @table
-                    AND     TABLE_SCHEMA = @schema
-                    AND     REFERENCED_TABLE_NAME IS NOT NULL;";
+                        AND TABLE_SCHEMA = @schema
+                        AND REFERENCED_TABLE_NAME IS NOT NULL;";
+
+    private const string GetUniqueConstraintSchemaSql =
+        @"      SELECT      tc.CONSTRAINT_NAME,
+                            cu.COLUMN_NAME
+                FROM        INFORMATION_SCHEMA.TABLE_CONSTRAINTS as tc
+                INNER JOIN  INFORMATION_SCHEMA.KEY_COLUMN_USAGE as cu
+                    ON      cu.TABLE_SCHEMA = tc.TABLE_SCHEMA
+                    AND     cu.TABLE_NAME = tc.TABLE_NAME
+                    AND     cu.CONSTRAINT_NAME = tc.CONSTRAINT_NAME 
+                WHERE       tc.TABLE_NAME = @table
+                    AND     tc.TABLE_SCHEMA = @schema
+                    AND     tc.CONSTRAINT_TYPE = 'UNIQUE';";
 
     private static string GetSchemaName(IDbConnection connection, DummyOptions? dummyOptions = null)
     {
@@ -123,7 +135,10 @@ public static class Dummy
             { "table", tableName }
         };
 
-        var (columnSchema, foreignKeySchema) = GetTableSchema(connection, parameters);
+        var schema = GetTableSchema(connection, parameters, tableName);
+
+        var columnSchema = schema.Columns;
+        var foreignKeySchema = schema.ForeignKeys;
 
         if (columnSchema.Count == 0)
         {
@@ -171,7 +186,6 @@ public static class Dummy
         var insertPart = $"INSERT INTO `{tableName}` ({colNamePart}) ";
         var valuesPart = $"VALUES ({paramNamePart})";
         var dynamicParameters = new Dictionary<string, object?>();
-
 
         foreach (var column in requiredColumns)
         {
@@ -251,7 +265,17 @@ public static class Dummy
                             break;
                         }
 
-                        if (FactoryIfColumnNamed(column, "Amount", random.Next(500, 10000), ref value))
+                        var uniqueFor = schema.UniqueConstraints.FirstOrDefault(x => ReferenceEquals(x.SelectedUniqueColumn, column));
+
+                        if (uniqueFor != null)
+                        {
+                            value = random.Next(0, 100000);
+                            do
+                            {
+                                value = ((int)value) + 3;
+                            } while (uniqueFor.DisallowedValues.Contains(value));
+                        }
+                        else if (FactoryIfColumnNamed(column, "Amount", random.Next(500, 10000), ref value))
                         {
                         }
                         else if (FactoryIfColumnNamed(column, "Month", random.Next(1, 13), ref value))
@@ -514,10 +538,14 @@ public static class Dummy
         return result;
     }
 
-    private static (List<ColumnSchemaEntry> columns, List<ForeignKeySchemaEntry> foreignKeys) GetTableSchema(IDbConnection connection, Dictionary<string, object?> parameters)
+    private static TableSchema GetTableSchema(
+        IDbConnection connection,
+        Dictionary<string, object?> parameters,
+        string tableName)
     {
         var columnSchema = new List<ColumnSchemaEntry>();
         var foreignKeySchema = new List<ForeignKeySchemaEntry>();
+        var uniqueConstraints = new List<UniqueConstraint>();
 
         using var sharedCommand = PrepareCommand(connection, GetColumnSchemaSql, parameters);
         {
@@ -559,9 +587,77 @@ public static class Dummy
                     foreignKeySchema.Add(entry);
                 }
             }
+
+            var dict = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+            sharedCommand.CommandText = GetUniqueConstraintSchemaSql;
+            using (var reader = sharedCommand.ExecuteReader())
+            {
+                while (reader.Read())
+                {
+                    var constraintName = reader.GetString(0);
+                    var columnName = reader.GetString(1);
+
+                    if (!dict.TryGetValue(constraintName, out var cols))
+                    {
+                        cols = new List<string>();
+                        dict[constraintName] = cols;
+                    }
+
+                    cols.Add(columnName);
+                }
+            }
+
+            foreach (var (name, colNames) in dict)
+            {
+                // This doesn't support foreign keys as part of the unique constraint currently which is a big gap...
+
+                // For each set of unique constraints find the column that can be made unique most easily.
+                var cols = colNames.Select(x => columnSchema.Single(y => string.Equals(x, y.Name))).ToList();
+
+                var existing = new List<object>();
+                ColumnSchemaEntry selected = null;
+                foreach (var col in cols)
+                {
+
+                    var canBeSufficientlyRandomised =
+                        col.IsBasicNumeric || string.Equals(col.DataType, "varchar",
+                                               StringComparison.OrdinalIgnoreCase)
+                                           || string.Equals(col.DataType, "text",
+                                               StringComparison.OrdinalIgnoreCase);
+
+                    if (canBeSufficientlyRandomised)
+                    {
+                        sharedCommand.CommandText = $"SELECT {col.Name} FROM {tableName};";
+
+                        using (var reader = sharedCommand.ExecuteReader())
+                        {
+                            while (reader.Read())
+                            {
+                                existing.Add(reader.GetValue(0));
+                            }
+                        }
+
+                        selected = col;
+                        break;
+                    }
+
+                }
+
+                if (selected == null)
+                {
+                    throw new InvalidOperationException(
+                        $"Could not find a column to ensure uniqueness for the unique constraint {name} in {tableName}.");
+                }
+
+                uniqueConstraints.Add(new UniqueConstraint(
+                    name,
+                    cols,
+                    selected,
+                    existing));
+            }
         }
 
-        return (columnSchema, foreignKeySchema);
+        return new TableSchema(columnSchema, foreignKeySchema, uniqueConstraints);
     }
 
     private static string GenerateRandomStringOfLengthOrLower(long length, Random random, bool allowWhitespace)
@@ -681,6 +777,10 @@ public static class Dummy
             }
         }
 
+        public bool IsBasicNumeric => string.Equals(DataType, "int", StringComparison.OrdinalIgnoreCase)
+                                      || string.Equals(DataType, "bigint", StringComparison.OrdinalIgnoreCase)
+                                      || string.Equals(DataType, "double", StringComparison.OrdinalIgnoreCase);
+
         public ColumnSchemaEntry(string name, string dataType)
         {
             Name = name;
@@ -704,6 +804,48 @@ public static class Dummy
         {
             ColumnName = columnName;
             TargetTableName = targetTableName;
+        }
+    }
+
+    private class UniqueConstraint
+    {
+        public string Name { get; }
+
+        public List<ColumnSchemaEntry> Columns { get; }
+
+        public ColumnSchemaEntry SelectedUniqueColumn { get; }
+
+        public List<object> DisallowedValues { get; }
+
+        public UniqueConstraint(
+            string name,
+            List<ColumnSchemaEntry> columns,
+            ColumnSchemaEntry selectedUniqueColumn,
+            List<object> disallowedValues)
+        {
+            Name = name;
+            Columns = columns;
+            SelectedUniqueColumn = selectedUniqueColumn;
+            DisallowedValues = disallowedValues;
+        }
+    }
+
+    private class TableSchema
+    {
+        public List<ColumnSchemaEntry> Columns { get; }
+
+        public List<ForeignKeySchemaEntry> ForeignKeys { get; }
+
+        public List<UniqueConstraint> UniqueConstraints { get; }
+
+        public TableSchema(
+            List<ColumnSchemaEntry> columns,
+            List<ForeignKeySchemaEntry> foreignKeys,
+            List<UniqueConstraint> uniqueConstraints)
+        {
+            Columns = columns;
+            ForeignKeys = foreignKeys;
+            UniqueConstraints = uniqueConstraints;
         }
     }
 }

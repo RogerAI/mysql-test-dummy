@@ -424,5 +424,20 @@ namespace CorpayOne.MysqlTestDummy.Tests
                     $"Unexpected exception message: {ex.Message}");
             }
         }
+
+        [Fact]
+        public void UniqueConstraintOnLinkedEntity_DoesNotFail()
+        {
+            var conn = _fixture.GetConnection();
+
+            for (int i = 0; i < 200; i++)
+            {
+                Dummy.CreateId(
+                    conn,
+                    "HashedLookups",
+                    new DummyOptions<int>()
+                        .MustForcePopulateOptionalColumns());
+            }
+        }
     }
 }
