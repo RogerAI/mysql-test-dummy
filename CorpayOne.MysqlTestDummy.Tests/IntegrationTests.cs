@@ -439,5 +439,24 @@ namespace CorpayOne.MysqlTestDummy.Tests
                         .MustForcePopulateOptionalColumns());
             }
         }
+
+        [Fact]
+        public void SupportsBitColumn()
+        {
+            var conn = _fixture.GetConnection();
+
+            var id1 = Dummy.CreateId<int>(
+                conn,
+                "UserViews");
+
+            Assert.True(id1 > 0);
+
+            var id2 = Dummy.CreateId<int>(
+                conn,
+                "UserViews",
+                new DummyOptions<int>().WithColumnValue("HasViewed", true));
+
+            Assert.True(id2 > 0);
+        }
     }
 }

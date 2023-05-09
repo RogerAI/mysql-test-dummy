@@ -222,6 +222,12 @@ public class DatabaseFixture : IDisposable
                 `SystemEntryId` INT NULL,
                 CONSTRAINT `FK_HashedLookups__SystemEntries`
                     FOREIGN KEY (`SystemEntryId`) REFERENCES `SystemEntries` (`Id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+            CREATE TABLE `UserViews` (
+                Id int NOT NULL PRIMARY KEY AUTO_INCREMENT,
+                UserId INT NOT NULL,
+                HasViewed BIT NOT NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
 
         command.ExecuteNonQuery();

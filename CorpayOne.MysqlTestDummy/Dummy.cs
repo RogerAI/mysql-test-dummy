@@ -339,6 +339,7 @@ public static class Dummy
                         value = "{ \"id\": 1 }";
                         break;
                     case "tinyint":
+                    case "bit":
                         value = random.Next(2);
                         break;
                     case "timestamp":
@@ -615,7 +616,7 @@ public static class Dummy
                 var cols = colNames.Select(x => columnSchema.Single(y => string.Equals(x, y.Name))).ToList();
 
                 var existing = new List<object>();
-                ColumnSchemaEntry selected = null;
+                ColumnSchemaEntry? selected = null;
                 foreach (var col in cols)
                 {
 
@@ -623,6 +624,8 @@ public static class Dummy
                         col.IsBasicNumeric || string.Equals(col.DataType, "varchar",
                                                StringComparison.OrdinalIgnoreCase)
                                            || string.Equals(col.DataType, "text",
+                                               StringComparison.OrdinalIgnoreCase)
+                                           || string.Equals(col.DataType, "longtext",
                                                StringComparison.OrdinalIgnoreCase);
 
                     if (canBeSufficientlyRandomised)
