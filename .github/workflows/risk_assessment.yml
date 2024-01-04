@@ -1,0 +1,8 @@
+﻿name: Enforce PR risk
+on:
+  pull_request:
+    types: [ opened, labeled, unlabeled, synchronize, edited ]
+
+jobs:
+  call-enforce-pr-risk-workflow:
+    uses: RogerAI/github-workflows/.github/workflows/risk_assessment_reusable.yml@main
