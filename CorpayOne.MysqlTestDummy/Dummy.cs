@@ -286,7 +286,7 @@ public static class Dummy
                         }
                         else
                         {
-                            value = random.Next(0, 100);
+                            value = random.Next(1, 500);
                         }
 
                         break;
@@ -473,12 +473,12 @@ public static class Dummy
             if (!insertReader.Read())
             {
                 throw new InvalidOperationException(
-                    $"Failed to execute insert into {tableName} with statement {insertCommand}.");
+                    $"Failed to execute insert into {tableName} with statement {insertCommand} because reader was empty.");
             }
 
             if (!IdMapper.TryReadOptional(type, insertReader, out var finalId))
             {
-                throw new InvalidOperationException($"Failed to execute insert into {tableName} with statement {insertCommand}.");
+                throw new InvalidOperationException($"Failed to execute insert into {tableName} with statement {insertCommand} because id could not be mapped.");
             }
 
             return finalId!;
