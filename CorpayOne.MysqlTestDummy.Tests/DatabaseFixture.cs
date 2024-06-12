@@ -228,6 +228,17 @@ public class DatabaseFixture : IDisposable
                 Id int NOT NULL PRIMARY KEY AUTO_INCREMENT,
                 UserId INT NOT NULL,
                 HasViewed BIT NOT NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+            CREATE TABLE `MaintenanceEvents` (
+              `Id` int NOT NULL AUTO_INCREMENT,
+              `UserId` int NOT NULL,
+              `Event` int NOT NULL,
+              `ApplicationType` int NOT NULL,
+              `IsActive` tinyint(1) NOT NULL DEFAULT '1',
+              `Created` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              `Token` varchar(100) NOT NULL DEFAULT '',
+              PRIMARY KEY (`Id`,`UserId`,`Event`,`ApplicationType`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
 
         command.ExecuteNonQuery();
