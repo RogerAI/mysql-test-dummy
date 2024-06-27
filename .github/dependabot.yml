@@ -20,5 +20,4 @@ updates:
       prefix: "[NS-000] - (github-actions) "
     open-pull-requests-limit: 20
     schedule:
-      interval: "weekly"
-      day: "sunday"
+      interval: "monthly"
