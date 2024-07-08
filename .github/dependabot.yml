@@ -4,8 +4,15 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     groups:
-      minor-and-patch:
+      minor-and-patch-version-updates:
         applies-to: version-updates
+        patterns:
+        - "*"
+        update-types:
+        - "minor"
+        - "patch"
+      minor-and-patch-security-updates:
+        applies-to: security-updates
         patterns:
         - "*"
         update-types:
